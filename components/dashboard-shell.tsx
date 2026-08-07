@@ -59,6 +59,12 @@ import {
 
 type Panel = "connections" | "preferences" | null;
 
+/**
+ * Hides the Connections entry point in the top bar. The panel and everything
+ * behind it stay in place; flip this back to true to surface it again.
+ */
+const SHOW_CONNECTIONS_ENTRY = false;
+
 interface Preferences {
   briefingTime: string;
   timeZone: string;
@@ -562,15 +568,17 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
               Daily Briefing
             </span>
             <div className="topbar-actions">
-              <button type="button" onClick={() => setPanel("connections")}>
-                <Link2 size={16} />
-                <span>Connections</span>
-                {(icalConnection?.state !== "connected" ||
-                  homeCalendarConnection?.state !== "connected" ||
-                  appleReminderConnection?.state !== "connected") && (
-                  <span className="setup-dot" aria-label="Setup needed" />
-                )}
-              </button>
+              {SHOW_CONNECTIONS_ENTRY && (
+                <button type="button" onClick={() => setPanel("connections")}>
+                  <Link2 size={16} />
+                  <span>Connections</span>
+                  {(icalConnection?.state !== "connected" ||
+                    homeCalendarConnection?.state !== "connected" ||
+                    appleReminderConnection?.state !== "connected") && (
+                    <span className="setup-dot" aria-label="Setup needed" />
+                  )}
+                </button>
+              )}
               <button type="button" onClick={() => setPanel("preferences")}>
                 <Settings2 size={16} />
                 <span>Preferences</span>
@@ -809,9 +817,6 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
                     );
                   })}
                 </div>
-                <button type="button" className="card-footer-action" onClick={() => openSource("Reminders")}>
-                  View reminder plan <ArrowUpRight size={15} />
-                </button>
               </section>
             )}
 
@@ -869,7 +874,6 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
                     {preferences.hideScores ? "Show scores" : "Hide spoilers"}
                   </button>
                 </div>
-                <p className="sports-note"><Trophy size={14} /> Tournament mode will elevate World Cups and Olympics when active.</p>
               </section>
             )}
 
@@ -975,7 +979,6 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
                     </section>
                   )}
                 </div>
-                <p className="attribution-note">Source-diverse headlines are clustered to avoid duplicates. Daily Briefing displays attribution and links—not copied articles.</p>
               </section>
             )}
           </div>
