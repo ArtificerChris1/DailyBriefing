@@ -26,10 +26,12 @@ import {
   sports,
   weather as demoWeather,
 } from "@/lib/demo-data";
+import { birthdaysInWindow } from "@/lib/providers/birthdays/birthday-list";
 import { fetchIcalCalendar } from "@/lib/providers/ical/calendar";
 import { fetchRssHeadlines } from "@/lib/providers/news/rss-headlines";
 import { fetchBggHotness } from "@/lib/providers/games/bgg-hotness";
 import { fetchQuoteOfTheDay } from "@/lib/providers/quotes/quote-of-the-day";
+import { fetchUpcomingReleases } from "@/lib/providers/releases/upcoming-releases";
 import { fetchLiveSports } from "@/lib/providers/sports/live-sports";
 import type { DailyWeatherSummary } from "@/lib/providers/weather/open-meteo";
 import { fetchOpenMeteoWeather } from "@/lib/providers/weather/open-meteo";
@@ -319,6 +321,7 @@ export async function getBriefingPayload(
     headlineResult,
     quoteResult,
     hotGames,
+    upcomingReleases,
   ] = await Promise.all([
     fetchIcalCalendar({ feed: "work", from, to, timeZone }),
     fetchIcalCalendar({ feed: "home", from, to, timeZone }),
@@ -327,6 +330,8 @@ export async function getBriefingPayload(
     fetchRssHeadlines(),
     fetchQuoteOfTheDay(),
     fetchBggHotness(),
+    // Anchored to the page being viewed, so the pager moves the window too.
+    fetchUpcomingReleases(date),
   ]);
 
   const liveCalendarItems = [
@@ -549,6 +554,9 @@ export async function getBriefingPayload(
       mode: hasLiveSource ? (hasDemoSource ? "mixed" : "live") : "demo",
       quote: quoteResult.quote,
       hotGames,
+      // Local data, so it needs no fetch and never appears in `sources`.
+      birthdays: birthdaysInWindow(date),
+      upcomingReleases,
       agenda: recentAgenda,
       reminders: briefingReminders,
       weather,

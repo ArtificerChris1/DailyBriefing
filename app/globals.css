@@ -1488,6 +1488,239 @@ a:focus-visible {
   line-height: 1.5;
 }
 
+.releases-card {
+  grid-column: span 8;
+  overflow: hidden;
+}
+
+.releases-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 2px 22px 4px;
+  list-style: none;
+}
+
+.release-row {
+  display: grid;
+  min-height: 56px;
+  grid-template-columns: 30px 32px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+
+.release-row:first-child {
+  border-top: 0;
+}
+
+.release-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  line-height: 1;
+}
+
+.release-date small {
+  color: var(--ink-faint);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.release-date strong {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+
+.release-thumb {
+  display: grid;
+  width: 32px;
+  height: 44px;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-faint);
+  background: #fafaf8;
+}
+
+.release-thumb img {
+  width: 32px;
+  height: 44px;
+  object-fit: cover;
+}
+
+.release-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.release-copy strong {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 660;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.release-copy small {
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.release-medium {
+  display: inline-flex;
+  min-height: 20px;
+  align-items: center;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 780;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.release-warning {
+  margin: 0 22px 4px;
+  color: var(--amber);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.release-medium-movie {
+  color: var(--work);
+  background: var(--work-soft);
+}
+
+.release-medium-tv {
+  color: var(--personal);
+  background: var(--personal-soft);
+}
+
+.release-medium-comic {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.release-medium-book {
+  color: var(--public);
+  background: var(--public-soft);
+}
+
+.birthdays-card {
+  grid-column: span 4;
+  overflow: hidden;
+}
+
+.birthday-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 2px 22px 18px;
+  list-style: none;
+}
+
+.birthday-row {
+  display: grid;
+  min-height: 48px;
+  grid-template-columns: 62px 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+
+.birthday-row:first-child {
+  border-top: 0;
+}
+
+.birthday-when {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.birthday-when strong {
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: -0.01em;
+}
+
+.birthday-when small {
+  color: var(--ink-faint);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.birthday-mark {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--ink-faint);
+  background: #fafaf8;
+}
+
+.birthday-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.birthday-copy strong {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 660;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.birthday-copy small {
+  color: var(--ink-faint);
+  font-size: 9px;
+}
+
+/* The one thing the card exists to answer: whose birthday is it right now. */
+.birthday-row-today .birthday-when strong,
+.birthday-row-today .birthday-copy strong {
+  color: var(--green);
+}
+
+.birthday-row-today .birthday-mark {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+/* Someone who has died is kept on the list but never highlighted as an event. */
+.birthday-row-memoriam .birthday-copy strong,
+.birthday-row-memoriam .birthday-when strong {
+  color: var(--ink-faint);
+  font-weight: 600;
+}
+
+.birthday-row-memoriam .birthday-mark {
+  color: var(--ink-faint);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
 .watch-count,
 .preferred-source {
   display: inline-flex;
@@ -2279,14 +2512,16 @@ a:focus-visible {
 
   .next-card,
   .agenda-card,
-  .news-card {
+  .news-card,
+  .releases-card {
     grid-column: span 2;
   }
 
   .weather-card,
   .reminders-card,
   .sports-card,
-  .hotness-card {
+  .hotness-card,
+  .birthdays-card {
     grid-column: span 1;
   }
 

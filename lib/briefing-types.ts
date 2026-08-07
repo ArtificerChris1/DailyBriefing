@@ -140,6 +140,64 @@ export interface HotGamesPanel {
   message?: string;
 }
 
+export type ReleaseMedium = "movie" | "tv" | "comic" | "book";
+
+export interface ReleaseItem {
+  id: string;
+  medium: ReleaseMedium;
+  title: string;
+  /** `YYYY-MM-DD` in the release's own calendar; these are dates, not instants. */
+  releasesOn: string;
+  /** Studio, network, publisher, or imprint. */
+  by?: string;
+  /** Author, series and issue number, or episode label. */
+  detail?: string;
+  posterUrl?: string;
+  url?: string;
+}
+
+export interface UpcomingReleasesPanel {
+  items: ReleaseItem[];
+  /** Attribution lines for whichever sources actually answered. */
+  attribution: string;
+  /** Per-source failures. The panel still renders whatever else came back. */
+  warnings: string[];
+  /** Set only when every configured source failed, so the card can say why. */
+  message?: string;
+}
+
+export interface BirthdayItem {
+  id: string;
+  name: string;
+  /** `MM-DD`. Recurring dates, not instants. */
+  on: string;
+  kind: "birthday" | "anniversary";
+  /**
+   * Days from the day being shown; negative is already past. Bounded by
+   * BIRTHDAY_LOOKBACK_DAYS and BIRTHDAY_LOOKAHEAD_DAYS.
+   */
+  offset: number;
+  /** Weekday and date for the occasion itself, e.g. "Sat, Aug 9". */
+  dateLabel: string;
+  /**
+   * Age, years married, or years lived — whatever the source year supports.
+   * Absent for the Facebook entries, which carry no year at all.
+   */
+  detail?: string;
+  /** The person has died; the row is a remembrance and shows no age. */
+  inMemoriam?: boolean;
+  /** Maiden name or other context, when the source list carried one. */
+  note?: string;
+  profileUrl?: string;
+}
+
+export interface BirthdaysPanel {
+  /** Chronological: earliest past day first, through the last upcoming day. */
+  items: BirthdayItem[];
+  /** How many land on the day being shown, so the card can lead with it. */
+  onDayCount: number;
+}
+
 export interface QuoteOfDay {
   text: string;
   author: string;
@@ -194,6 +252,9 @@ export interface BriefingSnapshot {
   quote?: QuoteOfDay;
   /** Absent entirely when no BGG application token is configured. */
   hotGames?: HotGamesPanel;
+  /** Absent entirely when no release source is configured. */
+  upcomingReleases?: UpcomingReleasesPanel;
+  birthdays: BirthdaysPanel;
   agenda: CalendarItem[];
   reminders: ReminderItem[];
   weather: WeatherItem;

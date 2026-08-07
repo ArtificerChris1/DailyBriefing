@@ -4,6 +4,8 @@ import Image from "next/image";
 import {
   ArrowUpRight,
   Bell,
+  BookOpen,
+  Cake,
   CalendarDays,
   Check,
   ChevronLeft,
@@ -14,6 +16,8 @@ import {
   Eye,
   EyeOff,
   FileText,
+  Film,
+  Heart,
   Link2,
   MapPin,
   Newspaper,
@@ -21,8 +25,10 @@ import {
   RotateCcw,
   Settings2,
   ShieldCheck,
+  Sparkles,
   Sun,
   Trophy,
+  Tv,
   Umbrella,
   X,
 } from "lucide-react";
@@ -48,6 +54,7 @@ import type {
   CurrentLocationInput,
   HourlyWeatherPoint,
   ProviderId,
+  ReleaseMedium,
   TrustZone,
 } from "@/lib/briefing-types";
 import {
@@ -169,6 +176,31 @@ function eventForecast(item: CalendarItem, hourlyWeather: HourlyWeatherPoint[]) 
 
 /** Games shown before the "show more" fold. */
 const SPORTS_PREVIEW_COUNT = 10;
+const RELEASES_PREVIEW_COUNT = 8;
+
+const releaseMedium: Record<
+  ReleaseMedium,
+  { label: string; icon: typeof Film }
+> = {
+  movie: { label: "Film", icon: Film },
+  tv: { label: "TV", icon: Tv },
+  comic: { label: "Comic", icon: Sparkles },
+  book: { label: "Book", icon: BookOpen },
+};
+
+/**
+ * Release dates are calendar days, not instants, so they are formatted from
+ * their own parts. Passing `2026-08-11` through `new Date()` would read it as
+ * UTC midnight and slide it to the 10th anywhere west of Greenwich.
+ */
+function releaseDateParts(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  const label = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    timeZone: "UTC",
+  }).format(Date.UTC(year, month - 1, day));
+  return { month: label, day: String(day) };
+}
 
 const CLOCK_TICK_MS = 30_000;
 
@@ -267,6 +299,7 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
   const [refreshing, setRefreshing] = useState(false);
   const [changingDay, setChangingDay] = useState(false);
   const [showAllSports, setShowAllSports] = useState(false);
+  const [showAllReleases, setShowAllReleases] = useState(false);
   const [completedReminders, setCompletedReminders] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const nowMs = useNow(Date.parse(initialPayload.briefing.generatedAt));
@@ -496,6 +529,7 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
     setPreferences(defaultPreferences);
     setCompletedReminders([]);
     setShowAllSports(false);
+    setShowAllReleases(false);
     window.localStorage.removeItem("brief-preferences");
     window.localStorage.removeItem("brief-completed-reminders");
     notify("Prototype preferences reset");
@@ -505,6 +539,11 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
     ? sports
     : sports.slice(0, SPORTS_PREVIEW_COUNT);
   const hiddenSportsCount = Math.max(0, sports.length - visibleSports.length);
+  const releases = briefing.upcomingReleases?.items ?? [];
+  const visibleReleases = showAllReleases
+    ? releases
+    : releases.slice(0, RELEASES_PREVIEW_COUNT);
+  const hiddenReleasesCount = Math.max(0, releases.length - visibleReleases.length);
   const releaseHeadline = headlines.find((headline) => headline.lane === "events");
   const now = nowMs;
   const nextEvent =
@@ -920,6 +959,169 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
                       </li>
                     ))}
                   </ol>
+                )}
+              </section>
+            )}
+
+            {briefing.upcomingReleases && (
+              <section className="card releases-card" aria-labelledby="releases-title">
+                <SectionHeading
+                  title="Upcoming releases"
+                  action={
+                    <span className="watch-count">
+                      {briefing.upcomingReleases.attribution}
+                    </span>
+                  }
+                />
+                {briefing.upcomingReleases.message ? (
+                  <p className="hotness-message" id="releases-title">
+                    {briefing.upcomingReleases.message}
+                  </p>
+                ) : (
+                  <>
+                    <ol className="releases-list" id="releases-title">
+                      {visibleReleases.map((release) => {
+                        const medium = releaseMedium[release.medium];
+                        const MediumIcon = medium.icon;
+                        const date = releaseDateParts(release.releasesOn);
+                        return (
+                          <li className="release-row" key={release.id}>
+                            <span className="release-date" aria-hidden="true">
+                              <small>{date.month}</small>
+                              <strong>{date.day}</strong>
+                            </span>
+                            <span
+                              className={`release-thumb release-thumb-${release.medium}`}
+                            >
+                              {release.posterUrl ? (
+                                <Image
+                                  src={release.posterUrl}
+                                  alt=""
+                                  width={32}
+                                  height={44}
+                                  unoptimized
+                                />
+                              ) : (
+                                <MediumIcon size={15} aria-hidden="true" />
+                              )}
+                            </span>
+                            <span className="release-copy">
+                              <strong>{release.title}</strong>
+                              <small>
+                                {[release.detail, release.by]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </small>
+                            </span>
+                            <span
+                              className={`release-medium release-medium-${release.medium}`}
+                            >
+                              {medium.label}
+                            </span>
+                            <button
+                              className="row-action"
+                              type="button"
+                              onClick={() => openSource(release.title, release.url)}
+                              aria-label={`Open ${release.title}, releasing ${date.month} ${date.day}`}
+                            >
+                              <ArrowUpRight size={16} />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                    {briefing.upcomingReleases.warnings.length > 0 && (
+                      <p className="release-warning">
+                        {briefing.upcomingReleases.warnings.join(" ")}
+                      </p>
+                    )}
+                    {releases.length > RELEASES_PREVIEW_COUNT && (
+                      <div className="sports-controls">
+                        <button
+                          type="button"
+                          onClick={() => setShowAllReleases((value) => !value)}
+                        >
+                          {showAllReleases
+                            ? "Show fewer"
+                            : `Show ${hiddenReleasesCount} more releases`}
+                          <ChevronRight
+                            size={14}
+                            className={showAllReleases ? "chevron-up" : ""}
+                          />
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </section>
+            )}
+
+            {briefing.birthdays && (
+              <section className="card birthdays-card" aria-labelledby="birthdays-title">
+                <SectionHeading
+                  title="Birthdays &amp; anniversaries"
+                  action={
+                    <span className="watch-count">
+                      {dayOffset === 0 && briefing.birthdays.onDayCount > 0
+                        ? `${briefing.birthdays.onDayCount} today`
+                        : `${briefing.birthdays.items.length} nearby`}
+                    </span>
+                  }
+                />
+                {briefing.birthdays.items.length === 0 ? (
+                  <p className="hotness-message" id="birthdays-title">
+                    Nothing from the last three days or the coming week.
+                  </p>
+                ) : (
+                  <ul className="birthday-list" id="birthdays-title">
+                    {briefing.birthdays.items.map((person) => {
+                      // The window follows the pager, so restate each offset
+                      // against the real today before labelling it.
+                      const offset = dayOffset + person.offset;
+                      const OccasionIcon =
+                        person.kind === "anniversary" ? Heart : Cake;
+                      const rowClass = [
+                        "birthday-row",
+                        offset === 0 && !person.inMemoriam
+                          ? "birthday-row-today"
+                          : "",
+                        person.inMemoriam ? "birthday-row-memoriam" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ");
+                      return (
+                        <li className={rowClass} key={person.id}>
+                          <span className="birthday-when">
+                            <strong>{relativeDayLabel(offset)}</strong>
+                            <small>{person.dateLabel}</small>
+                          </span>
+                          <span className="birthday-mark" aria-hidden="true">
+                            <OccasionIcon size={15} />
+                          </span>
+                          <span className="birthday-copy">
+                            <strong>{person.name}</strong>
+                            {(person.detail || person.note) && (
+                              <small>
+                                {[person.detail, person.note]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </small>
+                            )}
+                          </span>
+                          {person.profileUrl && (
+                            <button
+                              className="row-action"
+                              type="button"
+                              onClick={() => openSource(person.name, person.profileUrl)}
+                              aria-label={`Open ${person.name} on Facebook`}
+                            >
+                              <ArrowUpRight size={16} />
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 )}
               </section>
             )}

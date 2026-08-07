@@ -24,6 +24,13 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "cf.geekdo-static.com",
       },
+      // TMDB posters. Kept in step with POSTER_BASE in
+      // lib/providers/releases/tmdb-screen.ts.
+      {
+        protocol: "https",
+        hostname: "image.tmdb.org",
+        pathname: "/t/p/**",
+      },
     ],
   },
 };
