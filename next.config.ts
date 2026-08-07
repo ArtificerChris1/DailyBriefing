@@ -14,6 +14,16 @@ const nextConfig: NextConfig = {
         hostname: "www.thesportsdb.com",
         pathname: "/images/media/team/badge/**",
       },
+      // BoardGameGeek hot-list thumbnails. Kept in step with THUMBNAIL_HOSTS
+      // in lib/providers/games/bgg-hotness.ts, which drops any other host.
+      {
+        protocol: "https",
+        hostname: "cf.geekdo-images.com",
+      },
+      {
+        protocol: "https",
+        hostname: "cf.geekdo-static.com",
+      },
     ],
   },
 };

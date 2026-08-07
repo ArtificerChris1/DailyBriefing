@@ -873,6 +873,53 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
               </section>
             )}
 
+            {briefing.hotGames && (
+              <section className="card hotness-card" aria-labelledby="hotness-title">
+                <SectionHeading
+                  title="BGG Hotness"
+                  action={<span className="watch-count">{briefing.hotGames.attribution}</span>}
+                />
+                {briefing.hotGames.message ? (
+                  <p className="hotness-message" id="hotness-title">
+                    {briefing.hotGames.message}
+                  </p>
+                ) : (
+                  <ol className="hotness-list" id="hotness-title">
+                    {briefing.hotGames.items.map((game) => (
+                      <li className="hotness-row" key={game.id}>
+                        <span className="hotness-rank" aria-hidden="true">
+                          {game.rank}
+                        </span>
+                        <span className="hotness-thumb">
+                          {game.thumbnailUrl && (
+                            <Image
+                              src={game.thumbnailUrl}
+                              alt=""
+                              width={34}
+                              height={34}
+                              unoptimized
+                            />
+                          )}
+                        </span>
+                        <span className="hotness-copy">
+                          <strong>{game.name}</strong>
+                          {game.yearPublished && <small>{game.yearPublished}</small>}
+                        </span>
+                        <button
+                          className="row-action"
+                          type="button"
+                          onClick={() => openSource(game.name, game.url)}
+                          aria-label={`Open ${game.name} on BoardGameGeek`}
+                        >
+                          <ArrowUpRight size={16} />
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </section>
+            )}
+
             {preferences.showNews && (
               <section className="card news-card" aria-labelledby="news-title">
                 <SectionHeading

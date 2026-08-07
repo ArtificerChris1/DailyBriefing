@@ -37,25 +37,39 @@ Copy the result into `.env.local` without sharing it:
 APPLE_SHORTCUT_TOKEN=your-generated-token
 ```
 
-Restart Brief for the token to take effect. Changing this token later makes the prior encrypted snapshot unreadable; delete `.data/apple-reminders.enc` after changing it if you want to start fresh.
+Restart Brief for the token to take effect. On a deployment, add the same value as an environment variable in the hosting project rather than in a file. Changing this token later makes the prior encrypted snapshot unreadable; clear the stored snapshot after changing it if you want to start fresh.
 
-### 2. Make Brief reachable from the iPhone
+### 2. Give the snapshot somewhere to live
 
-The phone and computer must be on the same trusted Wi-Fi network. Start the LAN-enabled development server:
+The snapshot is encrypted before it is stored, so the store only ever holds ciphertext. Where it goes depends on where Brief runs.
 
-```powershell
-npm.cmd run dev:lan
+**Running locally:** nothing to do. Brief writes `.data/apple-reminders.enc` beside the project, or to `APPLE_REMINDERS_DATA_DIR` if that is set.
+
+**Deployed to Vercel:** the filesystem is read-only, so a file cannot be used. `/tmp` does not work either — it is scratch space for one function instance, and the instance that renders the dashboard is usually not the one that received the upload. Add a Redis store instead:
+
+1. In the Vercel project, open **Storage**, choose **Upstash for Redis** from the Marketplace, and connect it to the project.
+2. Vercel injects `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically. A database created directly at upstash.com sets `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`; either pair works.
+3. Redeploy so the new variables are picked up.
+
+Until this is done, **Connections** shows the Apple Reminders row in an error state, and Shortcut uploads are refused with HTTP 503 rather than failing silently.
+
+### 3. Find the Shortcut endpoint
+
+The endpoint is `/api/apple/reminders` on whichever address serves Brief:
+
+```text
+https://your-deployment.example.com/api/apple/reminders
 ```
 
-Run `ipconfig` and find the computer's **IPv4 Address** under the active Wi-Fi adapter. The Shortcut endpoint is:
+For a local-only setup, run `npm.cmd run dev:lan`, keep the phone and computer on the same trusted Wi-Fi network, and use the computer's **IPv4 Address** from `ipconfig`:
 
 ```text
 http://YOUR-COMPUTER-IP:3000/api/apple/reminders
 ```
 
-Allow Node.js on **Private networks** if Windows Firewall asks. This LAN mode makes the dashboard visible to devices on the same network, while Reminder uploads still require the secret token.
+Allow Node.js on **Private networks** if Windows Firewall asks. LAN mode makes the dashboard visible to every device on the network, while Reminder uploads still require the secret token.
 
-### 3. Build the Shortcut
+### 4. Build the Shortcut
 
 Create a new Shortcut named **Update Daily Briefing**, then add these actions in order:
 

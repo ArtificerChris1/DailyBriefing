@@ -63,7 +63,9 @@ Use an IANA time-zone name such as `America/Chicago`. Forecast days can be 1–1
 
 ## Local data and security
 
-Private feed addresses and the Shortcut token live only in Git-ignored `.env.local`. Raw calendars are not persisted. Reminder snapshots are authenticated, encrypted with AES-256-GCM before being written to `.data/apple-reminders.enc`, and unreadable without the Shortcut token.
+Private feed addresses and the Shortcut token live only in Git-ignored `.env.local`. Raw calendars are not persisted. Reminder snapshots are authenticated, encrypted with AES-256-GCM before being stored, and unreadable without the Shortcut token.
+
+The encrypted snapshot is written to `.data/apple-reminders.enc` by default. Set `KV_REST_API_URL` and `KV_REST_API_TOKEN` to store it in Redis instead, which is required on a serverless host such as Vercel because the deployment filesystem is read-only. Either way the store only ever holds ciphertext. See [Apple setup](docs/apple-setup.md) for the details.
 
 Sports and headline feeds need no private credentials. Brief uses TheSportsDB's documented free key against their v1 API unless `THESPORTSDB_API_KEY` is set, in which case team schedules come from the premium v2 API. It combines either with official MLB/NHL data and caches public results for 15 minutes. Headlines contain publisher-provided titles, dates, attribution, and canonical links—not copied article bodies.
 

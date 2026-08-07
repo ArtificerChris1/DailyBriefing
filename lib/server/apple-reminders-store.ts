@@ -7,11 +7,13 @@ import {
   randomBytes,
   timingSafeEqual,
 } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import path from "node:path";
 
 import type { ReminderItem } from "@/lib/briefing-types";
 import type { AppleReminderEnvelope } from "@/lib/providers/contracts";
+import {
+  reminderStorage,
+  reminderStorageProblem,
+} from "@/lib/server/reminder-storage";
 
 const ALGORITHM = "aes-256-gcm";
 const ASSOCIATED_DATA = Buffer.from("brief:apple-reminders:v1", "utf8");
@@ -45,6 +47,12 @@ export interface AppleReminderStoreStatus {
 
 let operationQueue: Promise<void> = Promise.resolve();
 
+/**
+ * Serializes reads and writes within one process. On a serverless host this no
+ * longer spans every request, so two uploads landing on separate instances in
+ * the same instant could both pass the replay check. One phone posting on a
+ * schedule never gets close to that window.
+ */
 function runExclusively<T>(operation: () => Promise<T>): Promise<T> {
   const result = operationQueue.then(operation, operation);
   operationQueue = result.then(
@@ -61,6 +69,11 @@ function configuredToken(): string | undefined {
 
 export function appleReminderBridgeConfigured(): boolean {
   return Boolean(configuredToken());
+}
+
+/** Describes a storage setup that cannot durably hold a snapshot, if any. */
+export function appleReminderStorageProblem(): string | undefined {
+  return reminderStorageProblem();
 }
 
 export function verifyAppleShortcutToken(candidate: string | undefined): boolean {
@@ -80,13 +93,6 @@ function encryptionKey(): Buffer {
     .update("brief:apple-reminders:key:v1\0", "utf8")
     .update(token, "utf8")
     .digest();
-}
-
-function storePath(): string {
-  const directory = process.env.APPLE_REMINDERS_DATA_DIR?.trim()
-    ? path.resolve(process.env.APPLE_REMINDERS_DATA_DIR)
-    : path.join(process.cwd(), ".data");
-  return path.join(directory, "apple-reminders.enc");
 }
 
 function encrypt(snapshot: StoredReminderSnapshot): EncryptedEnvelope {
@@ -129,25 +135,13 @@ function decrypt(envelope: EncryptedEnvelope): StoredReminderSnapshot {
 }
 
 async function readSnapshot(): Promise<StoredReminderSnapshot | undefined> {
-  try {
-    const serialized = await readFile(storePath(), "utf8");
-    return decrypt(JSON.parse(serialized) as EncryptedEnvelope);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw error;
-  }
+  const serialized = await reminderStorage().read();
+  if (!serialized) return undefined;
+  return decrypt(JSON.parse(serialized) as EncryptedEnvelope);
 }
 
 async function writeSnapshot(snapshot: StoredReminderSnapshot): Promise<void> {
-  const destination = storePath();
-  const directory = path.dirname(destination);
-  const temporary = `${destination}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  await writeFile(temporary, JSON.stringify(encrypt(snapshot)), {
-    encoding: "utf8",
-    mode: 0o600,
-  });
-  await rename(temporary, destination);
+  await reminderStorage().write(JSON.stringify(encrypt(snapshot)));
 }
 
 function reminderId(externalId: string): string {
@@ -223,6 +217,17 @@ export function getAppleReminderStoreStatus(): Promise<AppleReminderStoreStatus>
     });
   }
 
+  const storageProblem = reminderStorageProblem();
+  if (storageProblem) {
+    return Promise.resolve({
+      configured: true,
+      connected: false,
+      state: "error",
+      items: [],
+      message: storageProblem,
+    });
+  }
+
   return runExclusively(async () => {
     try {
       const snapshot = await readSnapshot();
@@ -248,7 +253,7 @@ export function getAppleReminderStoreStatus(): Promise<AppleReminderStoreStatus>
         connected: false,
         state: "error",
         items: [],
-        message: "The encrypted Apple reminder snapshot could not be read.",
+        message: "The stored Apple reminder snapshot could not be reached or decrypted.",
       };
     }
   });

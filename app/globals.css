@@ -1407,6 +1407,87 @@ a:focus-visible {
   overflow: hidden;
 }
 
+.hotness-card {
+  grid-column: span 4;
+  overflow: hidden;
+}
+
+.hotness-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 2px 22px 18px;
+  list-style: none;
+}
+
+.hotness-row {
+  display: grid;
+  min-height: 48px;
+  grid-template-columns: 18px 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+
+.hotness-row:first-child {
+  border-top: 0;
+}
+
+.hotness-rank {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  text-align: right;
+}
+
+.hotness-thumb {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fafaf8;
+}
+
+.hotness-thumb img {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+}
+
+.hotness-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hotness-copy strong {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 660;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hotness-copy small {
+  color: var(--ink-faint);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hotness-message {
+  margin: 0 22px 20px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .watch-count,
 .preferred-source {
   display: inline-flex;
@@ -2204,7 +2285,8 @@ a:focus-visible {
 
   .weather-card,
   .reminders-card,
-  .sports-card {
+  .sports-card,
+  .hotness-card {
     grid-column: span 1;
   }
 

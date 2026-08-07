@@ -123,6 +123,23 @@ export interface NewsItem extends BaseItem<"news"> {
   confirmed?: boolean;
 }
 
+export interface HotGameItem {
+  id: string;
+  rank: number;
+  name: string;
+  yearPublished?: number;
+  thumbnailUrl?: string;
+  url: string;
+}
+
+export interface HotGamesPanel {
+  items: HotGameItem[];
+  /** Required by BoardGameGeek's API terms whenever their data is shown. */
+  attribution: string;
+  /** Set when a token is configured but the list could not be loaded. */
+  message?: string;
+}
+
 export interface QuoteOfDay {
   text: string;
   author: string;
@@ -175,6 +192,8 @@ export interface BriefingSnapshot {
   timeZone: string;
   mode: "live" | "mixed" | "demo";
   quote?: QuoteOfDay;
+  /** Absent entirely when no BGG application token is configured. */
+  hotGames?: HotGamesPanel;
   agenda: CalendarItem[];
   reminders: ReminderItem[];
   weather: WeatherItem;

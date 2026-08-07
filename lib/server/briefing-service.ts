@@ -28,6 +28,7 @@ import {
 } from "@/lib/demo-data";
 import { fetchIcalCalendar } from "@/lib/providers/ical/calendar";
 import { fetchRssHeadlines } from "@/lib/providers/news/rss-headlines";
+import { fetchBggHotness } from "@/lib/providers/games/bgg-hotness";
 import { fetchQuoteOfTheDay } from "@/lib/providers/quotes/quote-of-the-day";
 import { fetchLiveSports } from "@/lib/providers/sports/live-sports";
 import type { DailyWeatherSummary } from "@/lib/providers/weather/open-meteo";
@@ -317,6 +318,7 @@ export async function getBriefingPayload(
     sportsResult,
     headlineResult,
     quoteResult,
+    hotGames,
   ] = await Promise.all([
     fetchIcalCalendar({ feed: "work", from, to, timeZone }),
     fetchIcalCalendar({ feed: "home", from, to, timeZone }),
@@ -324,6 +326,7 @@ export async function getBriefingPayload(
     fetchLiveSports(timeZone),
     fetchRssHeadlines(),
     fetchQuoteOfTheDay(),
+    fetchBggHotness(),
   ]);
 
   const liveCalendarItems = [
@@ -545,6 +548,7 @@ export async function getBriefingPayload(
       timeZone,
       mode: hasLiveSource ? (hasDemoSource ? "mixed" : "live") : "demo",
       quote: quoteResult.quote,
+      hotGames,
       agenda: recentAgenda,
       reminders: briefingReminders,
       weather,

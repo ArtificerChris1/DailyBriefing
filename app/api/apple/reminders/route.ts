@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import type { AppleReminderEnvelope } from "@/lib/providers/contracts";
 import {
   appleReminderBridgeConfigured,
+  appleReminderStorageProblem,
   saveAppleReminderEnvelope,
   verifyAppleShortcutToken,
 } from "@/lib/server/apple-reminders-store";
@@ -111,6 +112,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json(
       { error: "unauthorized" },
       { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+  // Checked only after authentication so the setup detail stays private, and
+  // before parsing so a misconfigured store fails legibly rather than as a 500.
+  const storageProblem = appleReminderStorageProblem();
+  if (storageProblem) {
+    return NextResponse.json(
+      { error: "snapshot_storage_not_configured", detail: storageProblem },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }
 
