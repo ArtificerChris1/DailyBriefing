@@ -1,0 +1,83 @@
+# Brief
+
+A private, mobile-first daily briefing that combines work and home calendars, hourly weather, reminders, sports, and headlines in one focused view.
+
+## What is live now
+
+- Open-Meteo supplies current conditions, feels-like temperature, and hourly weather aligned to the calendar timeline.
+- Private iCal subscriptions can supply today's work calendar and Apple home/family calendar, including recurring events and exceptions.
+- An authenticated iPhone Shortcut can send incomplete Apple Reminders to encrypted local storage.
+- TheSportsDB, MLB Stats, NHL, Iowa State Athletics, FIFA, and LA28 sources supply favorite-team schedules, results, tournament dates, and available standings.
+- Selected publisher RSS feeds supply current, attributed progressive/global and geek-culture headlines.
+- Outlook email and Teams messages are out of scope because organizational approval is unavailable.
+- If a live provider is unavailable, the dashboard continues with its sample fallback instead of failing.
+
+No notification delivery is enabled yet.
+
+## Run locally
+
+```powershell
+npm.cmd install
+if (!(Test-Path .env.local)) { Copy-Item .env.example .env.local }
+npm.cmd run dev
+```
+
+Open `http://localhost:3000`. After any `.env.local` change, stop the development server with `Ctrl+C` and start it again.
+
+Weather works without an API key. See [Apple setup](docs/apple-setup.md) to connect the home calendar and Reminders.
+
+## Connect the work calendar with iCal
+
+1. In Outlook on the web, open **Settings > Calendar > Shared calendars** and look for **Publish a calendar**.
+2. Select the work calendar and the option that includes event details, then copy the **ICS** link, not the HTML link.
+3. Add the private subscription address to `.env.local`:
+
+```dotenv
+WORK_CALENDAR_ICAL_URL=https://your-private-calendar-subscription.ics
+WORK_CALENDAR_ICAL_LABEL=Work calendar
+WORK_CALENDAR_ICAL_CACHE_SECONDS=300
+```
+
+4. Restart the development server and refresh the dashboard. **Connections** should show **Work calendar (iCal) — Connected**.
+
+Treat every iCal URL like a password. Brief fetches it only on the server, does not expose it to the browser, does not persist the raw feed, and caches only normalized events overlapping the current day. Revoke and republish a feed if its URL is exposed.
+
+## Weather configuration
+
+On localhost, the browser requests location permission and sends the current coordinates to the server for an Open-Meteo lookup. Brief uses the forecast time zone, keeps coordinates only in browser memory for the open page, and does not return them in the briefing API.
+
+If location permission is unavailable, the default is Chicago, Illinois. Override the fallback in `.env.local`:
+
+```dotenv
+OPEN_METEO_LATITUDE=41.8781
+OPEN_METEO_LONGITUDE=-87.6298
+OPEN_METEO_LOCATION=Chicago, IL
+OPEN_METEO_TIMEZONE=America/Chicago
+OPEN_METEO_TEMPERATURE_UNIT=fahrenheit
+OPEN_METEO_FORECAST_DAYS=3
+OPEN_METEO_TIMEOUT_MS=5000
+OPEN_METEO_CACHE_SECONDS=900
+```
+
+Use an IANA time-zone name such as `America/Chicago`. Forecast days can be 1–16, and temperature can be `fahrenheit` or `celsius`.
+
+## Local data and security
+
+Private feed addresses and the Shortcut token live only in Git-ignored `.env.local`. Raw calendars are not persisted. Reminder snapshots are authenticated, encrypted with AES-256-GCM before being written to `.data/apple-reminders.enc`, and unreadable without the Shortcut token.
+
+Sports and headline feeds need no private credentials. Brief uses TheSportsDB's documented free key against their v1 API unless `THESPORTSDB_API_KEY` is set, in which case team schedules come from the premium v2 API. It combines either with official MLB/NHL data and caches public results for 15 minutes. Headlines contain publisher-provided titles, dates, attribution, and canonical links—not copied article bodies.
+
+## Quality checks
+
+```powershell
+npm.cmd run lint
+npm.cmd run build
+```
+
+## Next integrations
+
+1. Add live match-by-match and medal-table coverage when World Cups or Olympics are active.
+2. Expand standings coverage and replace supporting sports data with licensed feeds before public distribution.
+3. Generate and schedule a privacy-safe daily notification or email.
+
+Raw provider responses and private content sent to external AI services remain excluded by default.
