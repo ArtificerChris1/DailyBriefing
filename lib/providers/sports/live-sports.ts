@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import type { SportsItem } from "@/lib/briefing-types";
+import { recencyCutoff } from "@/lib/recency";
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_CACHE_SECONDS = 15 * 60;
@@ -367,50 +368,79 @@ async function fetchTeamSchedule(
   return response.events ?? response.results ?? [];
 }
 
-async function fetchTeamItem(
+/**
+ * A finished game earns its own card only while it is still inside the briefing's
+ * rolling day, and only when the feed carries a real final score: postponed and
+ * abandoned fixtures also arrive dated in the past, with the scores left empty.
+ */
+function isFreshResult(event: SportsDbEvent, now: Date): boolean {
+  if (!COMPLETED_STATUSES.has((event.strStatus ?? "").toUpperCase())) return false;
+  if (!scoreLabel(event)) return false;
+  const instant = eventInstant(event);
+  return Boolean(instant && instant.getTime() >= recencyCutoff(now.getTime()));
+}
+
+/**
+ * Yesterday's result and the next game are two separate cards, so both feeds are
+ * always read. Choosing between them here would hide a score the moment the team
+ * had another game on the calendar, which for an in-season team is every day.
+ */
+async function fetchTeamItems(
   team: TeamDefinition,
   client: SportsDbClient,
   now: Date,
   timeZone: string,
   fetchedAt: string,
   timeoutMs: number,
-): Promise<SportsItem | undefined> {
+): Promise<SportsItem[]> {
   const upcoming = await fetchTeamSchedule(client, "next", team.id, timeoutMs);
   const next = upcoming.find((event) => {
     const instant = eventInstant(event);
     return instant && instant.getTime() >= now.getTime() - 6 * 60 * 60 * 1000;
   });
-  const nextInstant = next ? eventInstant(next) : undefined;
-  const usableNext =
-    next && nextInstant && nextInstant.getTime() >= now.getTime() - 6 * 60 * 60 * 1000
-      ? next
-      : undefined;
-  const completed = usableNext
-    ? []
-    : await fetchTeamSchedule(client, "previous", team.id, timeoutMs);
+  const completed = await fetchTeamSchedule(client, "previous", team.id, timeoutMs);
   const recent = completed.find((event) => eventInstant(event));
-  const recentInstant = recent ? eventInstant(recent) : undefined;
-  const chosen =
-    usableNext && nextInstant && nextInstant.getTime() <= now.getTime() + 14 * 86_400_000
-      ? usableNext
-      : recent && recentInstant && recentInstant.getTime() >= now.getTime() - 2 * 86_400_000
-        ? recent
-        : usableNext;
-  return chosen
-    ? sportsItem(team, chosen, recent, now, timeZone, fetchedAt)
-    : undefined;
+  const result = recent && isFreshResult(recent, now) ? recent : undefined;
+  // A game that kicked off in the last few hours can sit in both feeds, and two
+  // cards for one event would collide on the id derived from it.
+  const scheduled =
+    next && next.idEvent && next.idEvent === result?.idEvent ? undefined : next;
+  const items: SportsItem[] = [];
+  if (result) {
+    const item = sportsItem(team, result, undefined, now, timeZone, fetchedAt);
+    if (item) items.push(item);
+  }
+  if (scheduled) {
+    // The upcoming card only restates the last score when no result card carries
+    // it — that is the older-than-a-day case, where the context is all there is.
+    const item = sportsItem(
+      team,
+      scheduled,
+      result ? undefined : recent,
+      now,
+      timeZone,
+      fetchedAt,
+    );
+    if (item) items.push(item);
+  }
+  return items;
 }
 
 function isoDate(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
-async function fetchKernelsItem(
+/**
+ * Same split as the TheSportsDB teams: recent results and the next game are all
+ * cards, not candidates for one slot. A Midwest League doubleheader legitimately
+ * leaves two results behind, so every finished game in the window is kept.
+ */
+async function fetchKernelsItems(
   now: Date,
   timeZone: string,
   fetchedAt: string,
   timeoutMs: number,
-): Promise<SportsItem | undefined> {
+): Promise<SportsItem[]> {
   const start = new Date(now.getTime() - 2 * 86_400_000);
   const end = new Date(now.getTime() + 14 * 86_400_000);
   const response = await fetchJson<{ dates?: Array<{ games?: MlbGame[] }> }>(
@@ -422,11 +452,34 @@ async function fetchKernelsItem(
     const time = Date.parse(game.gameDate ?? "");
     return Number.isFinite(time) && time >= now.getTime() - 3 * 60 * 60 * 1000;
   });
-  const recent = [...games].reverse().find((game) =>
-    game.status?.abstractGameState === "Final",
-  );
-  const game = upcoming ?? recent;
-  if (!game?.gameDate || !game.gamePk) return undefined;
+  const cutoff = recencyCutoff(now.getTime());
+  // A suspended game is listed under both its original and its resumption date
+  // with one `gamePk`. The later entry is the one that actually finished, and
+  // keeping both would give two cards the same id.
+  const finals = new Map<number, MlbGame>();
+  for (const game of games) {
+    if (game.status?.abstractGameState !== "Final" || !game.gamePk) continue;
+    const time = Date.parse(game.gameDate ?? "");
+    if (!Number.isFinite(time) || time < cutoff) continue;
+    const previous = finals.get(game.gamePk);
+    if (!previous || Date.parse(previous.gameDate ?? "") < time) {
+      finals.set(game.gamePk, game);
+    }
+  }
+  const selected = [...finals.values()];
+  if (upcoming?.gamePk && !finals.has(upcoming.gamePk)) selected.push(upcoming);
+  return selected
+    .map((game) => kernelsItem(game, now, timeZone, fetchedAt))
+    .filter((item): item is SportsItem => Boolean(item));
+}
+
+function kernelsItem(
+  game: MlbGame,
+  now: Date,
+  timeZone: string,
+  fetchedAt: string,
+): SportsItem | undefined {
+  if (!game.gameDate || !game.gamePk) return undefined;
   const instant = new Date(game.gameDate);
   const status = game.status?.abstractGameState;
   const detailedStatus = game.status?.detailedState;
@@ -463,7 +516,7 @@ async function fetchKernelsItem(
     group: "local",
     context:
       state === "final"
-        ? "Latest completed Kernels game."
+        ? "Completed Kernels game."
         : detailedStatus ?? "Upcoming Kernels game.",
     zone: "public",
     sensitivity: "public",
@@ -877,23 +930,23 @@ export async function fetchLiveSports(timeZone: string): Promise<LiveSportsResul
   );
   for (const team of teams) {
     try {
-      const item = await fetchTeamItem(
-        team,
-        client,
-        now,
-        timeZone,
-        fetchedAt,
-        timeoutMs,
+      items.push(
+        ...(await fetchTeamItems(
+          team,
+          client,
+          now,
+          timeZone,
+          fetchedAt,
+          timeoutMs,
+        )),
       );
-      if (item) items.push(item);
     } catch {
       failures += 1;
     }
     await pause(150);
   }
   try {
-    const kernels = await fetchKernelsItem(now, timeZone, fetchedAt, timeoutMs);
-    if (kernels) items.push(kernels);
+    items.push(...(await fetchKernelsItems(now, timeZone, fetchedAt, timeoutMs)));
   } catch {
     failures += 1;
   }
