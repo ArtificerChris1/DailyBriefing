@@ -33,29 +33,10 @@ function isoDate(value: unknown): string | undefined {
     : undefined;
 }
 
-// TEMPORARY DIAGNOSTIC: reports which field failed validation so the iPhone
-// Shortcut can be debugged from its response. Revert once the Shortcut works.
-type ParseResult =
-  | { ok: true; envelope: AppleReminderEnvelope }
-  | { ok: false; reason: string };
-
-function describe(value: unknown): string {
-  if (value === undefined) return "missing";
-  if (value === null) return "null";
-  if (Array.isArray(value)) return `array(len=${value.length})`;
-  return `${typeof value} ${JSON.stringify(value)?.slice(0, 80)}`;
-}
-
-function parseEnvelope(value: unknown): ParseResult {
+function parseEnvelope(value: unknown): AppleReminderEnvelope | undefined {
   const body = record(value);
-  if (!body) {
-    return { ok: false, reason: `body must be a JSON object, got ${describe(value)}` };
-  }
-  if (body.schemaVersion !== undefined && body.schemaVersion !== 1) {
-    return {
-      ok: false,
-      reason: `schemaVersion must be the NUMBER 1, got ${describe(body.schemaVersion)}`,
-    };
+  if (!body || (body.schemaVersion !== undefined && body.schemaVersion !== 1)) {
+    return undefined;
   }
   // Shortcuts collapses a single-element list into the element itself, so a
   // one-reminder export arrives as a bare object rather than an array.
@@ -65,33 +46,19 @@ function parseEnvelope(value: unknown): ParseResult {
       ? [body.reminders]
       : undefined;
   if (!rawReminders) {
-    return {
-      ok: false,
-      reason: `reminders must be an array or a single object, got ${describe(body.reminders)}`,
-    };
+    return undefined;
   }
   const deviceId = boundedString(body.deviceId, 100) ?? "apple-shortcut";
   const exportedAt = isoDate(body.exportedAt) ?? new Date().toISOString();
   const nonce = boundedString(body.nonce, 200);
-  if (!nonce) {
-    return {
-      ok: false,
-      reason: `nonce must be a non-empty string (max 200 chars), got ${describe(body.nonce)}`,
-    };
-  }
-  if (rawReminders.length > 500) {
-    return { ok: false, reason: `too many reminders: ${rawReminders.length} (max 500)` };
+  if (!nonce || rawReminders.length > 500) {
+    return undefined;
   }
 
   const reminders: AppleReminderEnvelope["reminders"] = [];
   for (const [index, value] of rawReminders.entries()) {
     const item = record(value);
-    if (!item) {
-      return {
-        ok: false,
-        reason: `reminders[${index}] must be an object, got ${describe(value)} — a nested array here means the Shortcut wrapped Repeat Results instead of assigning it`,
-      };
-    }
+    if (!item) return undefined;
     const title = boundedString(item.title, 500);
     const due = item.due === undefined || item.due === null ? undefined : isoDate(item.due);
     const listLabel =
@@ -105,29 +72,13 @@ function parseEnvelope(value: unknown): ParseResult {
         .digest("base64url")}`;
     const modifiedAt = isoDate(item.modifiedAt) ?? exportedAt;
     const completed = item.completed === undefined ? false : item.completed;
-    if (!title) {
-      return {
-        ok: false,
-        reason: `reminders[${index}].title must be a non-empty string, got ${describe(item.title)}`,
-      };
-    }
-    if (typeof completed !== "boolean") {
-      return {
-        ok: false,
-        reason: `reminders[${index}].completed must be a BOOLEAN, got ${describe(item.completed)}`,
-      };
-    }
-    if (item.due !== undefined && item.due !== null && !due) {
-      return {
-        ok: false,
-        reason: `reminders[${index}].due must be a parseable date, got ${describe(item.due)}`,
-      };
-    }
-    if (item.listLabel !== undefined && !listLabel) {
-      return {
-        ok: false,
-        reason: `reminders[${index}].listLabel must be a non-empty string, got ${describe(item.listLabel)}`,
-      };
+    if (
+      !title ||
+      typeof completed !== "boolean" ||
+      (item.due !== undefined && item.due !== null && !due) ||
+      (item.listLabel !== undefined && !listLabel)
+    ) {
+      return undefined;
     }
     reminders.push({
       externalId,
@@ -139,7 +90,7 @@ function parseEnvelope(value: unknown): ParseResult {
     });
   }
 
-  return { ok: true, envelope: { schemaVersion: 1, deviceId, exportedAt, nonce, reminders } };
+  return { schemaVersion: 1, deviceId, exportedAt, nonce, reminders };
 }
 
 function bearerToken(request: Request): string | undefined {
@@ -169,16 +120,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   } catch {
     body = undefined;
   }
-  const parsed = parseEnvelope(body);
-  if (!parsed.ok) {
+  const envelope = parseEnvelope(body);
+  if (!envelope) {
     return NextResponse.json(
-      { error: "invalid_apple_reminder_snapshot", detail: parsed.reason },
+      { error: "invalid_apple_reminder_snapshot" },
       { status: 400, headers: { "Cache-Control": "no-store" } },
     );
   }
 
   try {
-    const result = await saveAppleReminderEnvelope(parsed.envelope);
+    const result = await saveAppleReminderEnvelope(envelope);
     return NextResponse.json(
       { accepted: true, count: result.count, receivedAt: result.receivedAt },
       { headers: { "Cache-Control": "no-store" } },
