@@ -57,10 +57,17 @@ function parseEnvelope(value: unknown): ParseResult {
       reason: `schemaVersion must be the NUMBER 1, got ${describe(body.schemaVersion)}`,
     };
   }
-  if (!Array.isArray(body.reminders)) {
+  // Shortcuts collapses a single-element list into the element itself, so a
+  // one-reminder export arrives as a bare object rather than an array.
+  const rawReminders = Array.isArray(body.reminders)
+    ? body.reminders
+    : record(body.reminders)
+      ? [body.reminders]
+      : undefined;
+  if (!rawReminders) {
     return {
       ok: false,
-      reason: `reminders must be an array, got ${describe(body.reminders)}`,
+      reason: `reminders must be an array or a single object, got ${describe(body.reminders)}`,
     };
   }
   const deviceId = boundedString(body.deviceId, 100) ?? "apple-shortcut";
@@ -72,12 +79,12 @@ function parseEnvelope(value: unknown): ParseResult {
       reason: `nonce must be a non-empty string (max 200 chars), got ${describe(body.nonce)}`,
     };
   }
-  if (body.reminders.length > 500) {
-    return { ok: false, reason: `too many reminders: ${body.reminders.length} (max 500)` };
+  if (rawReminders.length > 500) {
+    return { ok: false, reason: `too many reminders: ${rawReminders.length} (max 500)` };
   }
 
   const reminders: AppleReminderEnvelope["reminders"] = [];
-  for (const [index, value] of body.reminders.entries()) {
+  for (const [index, value] of rawReminders.entries()) {
     const item = record(value);
     if (!item) {
       return {
