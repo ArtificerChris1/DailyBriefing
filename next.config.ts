@@ -31,6 +31,17 @@ const nextConfig: NextConfig = {
         hostname: "image.tmdb.org",
         pathname: "/t/p/**",
       },
+      // Metron issue covers. Their deployment serves media from a DigitalOcean
+      // Spaces custom domain, so the subdomain is matched rather than named;
+      // kept in step with coverUrl() in lib/providers/releases/metron-comics.ts.
+      {
+        protocol: "https",
+        hostname: "metron.cloud",
+      },
+      {
+        protocol: "https",
+        hostname: "**.metron.cloud",
+      },
     ],
   },
 };

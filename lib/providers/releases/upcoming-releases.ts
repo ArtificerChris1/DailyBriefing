@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { ReleaseItem, UpcomingReleasesPanel } from "@/lib/briefing-types";
+import { fetchComicReleases } from "./metron-comics";
 import { fetchBookReleases } from "./reactor-books";
 import {
   DEFAULT_CACHE_SECONDS,
@@ -23,13 +24,6 @@ const cache = new Map<string, { expiresAt: number; panel: UpcomingReleasesPanel 
 /** The pager spans a few weeks at most, so the map cannot grow without bound. */
 const MAX_CACHE_ENTRIES = 16;
 
-/**
- * Comics are still a medium the card knows how to render, but no source feeds
- * them: Shortboxed is gone, Metron has closed new signups, Marvel's developer
- * portal now redirects to marvel.com, and ComicList is a stale blog. Adding a
- * provider that returns ReleaseItems with `medium: "comic"` is all it takes —
- * nothing else here needs to change.
- */
 const MEDIUM_ORDER: ReleaseItem["medium"][] = ["movie", "tv", "book", "comic"];
 
 function balance(items: ReleaseItem[]): ReleaseItem[] {
@@ -84,14 +78,15 @@ export async function fetchUpcomingReleases(
   const cached = cache.get(today);
   if (cached && cached.expiresAt > now) return cached.panel;
 
-  const [screen, books] = await Promise.all([
+  const [screen, books, comics] = await Promise.all([
     fetchScreenReleases(today, to),
     fetchBookReleases(today, to),
+    fetchComicReleases(today, to),
   ]);
 
-  const warnings = [...screen.warnings, ...books.warnings];
+  const warnings = [...screen.warnings, ...books.warnings, ...comics.warnings];
   // A release that already happened is not upcoming, whatever a source claims.
-  const inWindow = [...screen.items, ...books.items].filter(
+  const inWindow = [...screen.items, ...books.items, ...comics.items].filter(
     (item) => item.releasesOn >= today && item.releasesOn <= to,
   );
   const items = balance(inWindow);
@@ -103,13 +98,14 @@ export async function fetchUpcomingReleases(
     [
       contributed.has("movie") || contributed.has("tv") ? "TMDB" : undefined,
       contributed.has("book") ? "Reactor" : undefined,
+      contributed.has("comic") ? "Metron" : undefined,
     ]
       .filter(Boolean)
       .join(" · ") || "No sources reporting";
 
   if (items.length === 0) {
     // Nothing configured and nothing free came back: no card at all.
-    if (!screen.configured && books.items.length === 0) {
+    if (!screen.configured && !comics.configured && books.items.length === 0) {
       return undefined;
     }
     const panel: UpcomingReleasesPanel = {
