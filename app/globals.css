@@ -336,10 +336,62 @@ a:focus-visible {
   to { transform: rotate(360deg); }
 }
 
+/*
+ * The dashboard is read on a phone first, so one full-width column is the
+ * default and the wider layouts are opt-in. Cards span the whole track rather
+ * than naming a column count, which keeps a newly added card full width
+ * instead of silently inventing implicit columns.
+ */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
+}
+
+.dashboard-grid > .card {
+  min-width: 0;
+  grid-column: 1 / -1;
+}
+
+/*
+ * The narrow-card selectors keep the `.dashboard-grid >` prefix so they match
+ * the full-width rule's specificity; a media query adds none of its own, and a
+ * bare `.next-card` would lose to `.dashboard-grid > .card` at every width.
+ *
+ * Tablet and small windows: two columns, with the wide cards still full width.
+ */
+@media (min-width: 681px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-grid > .weather-card,
+  .dashboard-grid > .reminders-card,
+  .dashboard-grid > .sports-card,
+  .dashboard-grid > .hotness-card,
+  .dashboard-grid > .birthdays-card {
+    grid-column: span 1;
+  }
+}
+
+@media (min-width: 1051px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  .dashboard-grid > .next-card,
+  .dashboard-grid > .releases-card,
+  .dashboard-grid > .news-card {
+    grid-column: span 8;
+  }
+
+  .dashboard-grid > .weather-card,
+  .dashboard-grid > .reminders-card,
+  .dashboard-grid > .sports-card,
+  .dashboard-grid > .hotness-card,
+  .dashboard-grid > .birthdays-card {
+    grid-column: span 4;
+  }
 }
 
 .card {
@@ -417,7 +469,6 @@ a:focus-visible {
 }
 
 .next-card {
-  grid-column: span 8;
   overflow: hidden;
 }
 
@@ -507,7 +558,6 @@ a:focus-visible {
 }
 
 .weather-card {
-  grid-column: span 4;
   padding: 20px 22px;
   background: linear-gradient(155deg, #f7fbf9 0%, #eff8f5 100%);
 }
@@ -574,10 +624,6 @@ a:focus-visible {
   color: #35685f;
   font-size: 10px;
   font-weight: 650;
-}
-
-.agenda-card {
-  grid-column: span 12;
 }
 
 .forecast-freshness {
@@ -1289,7 +1335,6 @@ a:focus-visible {
 }
 
 .reminders-card {
-  grid-column: span 4;
   overflow: hidden;
 }
 
@@ -1403,12 +1448,10 @@ a:focus-visible {
 }
 
 .sports-card {
-  grid-column: span 4;
   overflow: hidden;
 }
 
 .hotness-card {
-  grid-column: span 4;
   overflow: hidden;
 }
 
@@ -1489,7 +1532,6 @@ a:focus-visible {
 }
 
 .releases-card {
-  grid-column: span 8;
   overflow: hidden;
 }
 
@@ -1621,7 +1663,6 @@ a:focus-visible {
 }
 
 .birthdays-card {
-  grid-column: span 4;
   overflow: hidden;
 }
 
@@ -1861,7 +1902,6 @@ a:focus-visible {
 }
 
 .news-card {
-  grid-column: span 8;
   overflow: hidden;
 }
 
@@ -2506,25 +2546,6 @@ a:focus-visible {
     width: min(100% - 40px, 960px);
   }
 
-  .dashboard-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .next-card,
-  .agenda-card,
-  .news-card,
-  .releases-card {
-    grid-column: span 2;
-  }
-
-  .weather-card,
-  .reminders-card,
-  .sports-card,
-  .hotness-card,
-  .birthdays-card {
-    grid-column: span 1;
-  }
-
   .headline-list {
     grid-template-columns: 1fr;
   }
@@ -2626,19 +2647,6 @@ a:focus-visible {
     white-space: nowrap;
   }
 
-  .dashboard-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .next-card,
-  .weather-card,
-  .agenda-card,
-  .reminders-card,
-  .sports-card,
-  .news-card {
-    grid-column: span 1;
-  }
-
   .section-heading {
     padding: 18px 17px 0;
   }
@@ -2670,7 +2678,7 @@ a:focus-visible {
   }
 
   .weather-card {
-    display: none;
+    padding: 18px 17px;
   }
 
   .schedule-list {
@@ -2761,7 +2769,10 @@ a:focus-visible {
   .timeline,
   .reminder-list,
   .sports-list,
-  .headline-list {
+  .headline-list,
+  .hotness-list,
+  .releases-list,
+  .birthday-list {
     padding-right: 17px;
     padding-left: 17px;
   }
@@ -2887,6 +2898,28 @@ a:focus-visible {
 
   .schedule-entry-weather span {
     white-space: normal;
+  }
+
+  /* These list rows were laid out for a third-width column; at phone width the
+     fixed cells have to give their slack back to the title. */
+  .release-row {
+    grid-template-columns: 28px 30px minmax(0, 1fr) auto auto;
+    gap: 9px;
+  }
+
+  .release-medium {
+    padding-inline: 5px;
+    font-size: 8px;
+  }
+
+  /* The day column keeps its width — "3 days ago" has to fit on one line. */
+  .birthday-row {
+    grid-template-columns: 62px 20px minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .hotness-row {
+    gap: 8px;
   }
 }
 
