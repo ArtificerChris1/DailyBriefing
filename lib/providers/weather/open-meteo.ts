@@ -1,5 +1,3 @@
-import "server-only";
-
 import type {
   HourlyWeatherPoint,
   WeatherItem,
@@ -102,8 +100,9 @@ class InvalidWeatherResponseError extends Error {
 }
 
 /**
- * Reads server-side configuration. Every variable is optional; defaults target
- * the Chicago demo profile already used by the briefing.
+ * Reads build-time configuration. Every variable is optional; defaults target
+ * the Chicago demo profile already used by the briefing. In the browser the
+ * variables are absent, so callers there pass a full config instead.
  */
 export function getOpenMeteoConfigFromEnv(): OpenMeteoConfig {
   const temperatureUnit = normalizeTemperatureUnit(

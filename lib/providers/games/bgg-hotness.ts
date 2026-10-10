@@ -117,7 +117,6 @@ export async function fetchBggHotness(): Promise<HotGamesPanel | undefined> {
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(BGG_HOT_URL, {
-      cache: "no-store",
       headers: {
         Accept: "application/xml, text/xml",
         Authorization: `Bearer ${token}`,

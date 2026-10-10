@@ -44,7 +44,6 @@ export async function fetchWithLimits(
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
-      cache: "no-store",
       ...rest,
       signal: controller.signal,
     });

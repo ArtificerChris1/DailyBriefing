@@ -366,7 +366,6 @@ a:focus-visible {
   }
 
   .dashboard-grid > .weather-card,
-  .dashboard-grid > .reminders-card,
   .dashboard-grid > .sports-card,
   .dashboard-grid > .hotness-card,
   .dashboard-grid > .birthdays-card {
@@ -386,7 +385,6 @@ a:focus-visible {
   }
 
   .dashboard-grid > .weather-card,
-  .dashboard-grid > .reminders-card,
   .dashboard-grid > .sports-card,
   .dashboard-grid > .hotness-card,
   .dashboard-grid > .birthdays-card {
@@ -1332,92 +1330,6 @@ a:focus-visible {
   margin: 3px 0 7px;
   color: var(--ink-faint);
   font-size: 10px;
-}
-
-.reminders-card {
-  overflow: hidden;
-}
-
-.item-count {
-  display: inline-grid;
-  width: 25px;
-  height: 25px;
-  place-items: center;
-  border-radius: 8px;
-  background: #f1f2ee;
-  color: var(--ink-soft);
-  font-size: 10px;
-  font-weight: 750;
-}
-
-.reminder-list {
-  padding: 13px 22px 15px;
-}
-
-.reminder-item {
-  position: relative;
-  display: grid;
-  min-height: 60px;
-  grid-template-columns: 22px 1fr;
-  align-items: start;
-  gap: 10px;
-  padding: 13px 0;
-  border-bottom: 1px solid #ecece8;
-  cursor: pointer;
-}
-
-.reminder-item:last-child {
-  border-bottom: 0;
-}
-
-.reminder-item input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-}
-
-.custom-check {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
-  border: 1.5px solid #c6cac5;
-  border-radius: 6px;
-  color: transparent;
-  transition: background-color 150ms ease, border-color 150ms ease;
-}
-
-.reminder-item input:focus-visible + .custom-check {
-  outline: 3px solid rgba(40, 116, 208, 0.28);
-  outline-offset: 2px;
-}
-
-.reminder-item input:checked + .custom-check {
-  border-color: var(--green);
-  background: var(--green);
-  color: #fff;
-}
-
-.reminder-copy strong,
-.reminder-copy small {
-  display: block;
-}
-
-.reminder-copy strong {
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.reminder-copy small {
-  margin-top: 3px;
-  color: var(--ink-faint);
-  font-size: 10px;
-}
-
-.reminder-complete .reminder-copy {
-  opacity: 0.55;
-  text-decoration: line-through;
 }
 
 .card-footer-action {
@@ -2767,7 +2679,6 @@ a:focus-visible {
   }
 
   .timeline,
-  .reminder-list,
   .sports-list,
   .headline-list,
   .hotness-list,

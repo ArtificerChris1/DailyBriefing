@@ -1,8 +1,25 @@
 import type { NextConfig } from "next";
 
+// Set by the Pages workflow to "/<repo>"; empty for local development.
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || undefined;
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // A plain static site: `next build` writes HTML and JSON to `out/`, and
+  // every provider runs then rather than on a server.
+  output: "export",
+  basePath,
+  experimental: {
+    // Render the 22 day files one at a time in one process, so each provider's
+    // in-memory cache is shared between them. In parallel, every day fetched
+    // every feed itself and Open-Meteo refused the burst.
+    cpus: 1,
+    staticGenerationMaxConcurrency: 1,
+  },
   images: {
+    // A static host has no image optimizer, so images load straight from
+    // their source.
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",

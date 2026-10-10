@@ -35,24 +35,8 @@ export interface PullAdapter<T extends BriefingItem> {
   readonly provider: ProviderId;
   readonly capability:
     | "calendar"
-    | "reminders"
     | "weather"
     | "sports"
     | "news";
   pull(request: PullRequest, context: AdapterContext): Promise<PullResult<T>>;
-}
-
-export interface AppleReminderEnvelope {
-  schemaVersion: 1;
-  deviceId: string;
-  exportedAt: string;
-  nonce: string;
-  reminders: Array<{
-    externalId: string;
-    title: string;
-    due?: string;
-    completed: boolean;
-    listLabel?: string;
-    modifiedAt: string;
-  }>;
 }
