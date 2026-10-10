@@ -55,7 +55,6 @@ export async function fetchQuoteOfTheDay(): Promise<QuoteOfDayResult> {
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(QUOTE_URL, {
-      cache: "no-store",
       headers: { Accept: "application/json", "X-Api-Key": apiKey },
       signal: controller.signal,
     });

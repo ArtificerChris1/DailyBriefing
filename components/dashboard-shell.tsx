@@ -3,7 +3,6 @@
 import Image from "next/image";
 import {
   ArrowUpRight,
-  Bell,
   BookOpen,
   Cake,
   CalendarDays,
@@ -51,7 +50,6 @@ import type {
   CalendarItem,
   ConnectionSummary,
   ConnectorDefinition,
-  CurrentLocationInput,
   HourlyWeatherPoint,
   ProviderId,
   ReleaseMedium,
@@ -63,6 +61,11 @@ import {
   dayOffsetBetween,
   shiftDateKey,
 } from "@/lib/briefing-window";
+import {
+  fetchLocalWeather,
+  withLocalWeather,
+  type LiveWeather,
+} from "@/lib/live-weather";
 
 type Panel = "connections" | "preferences" | null;
 
@@ -72,11 +75,13 @@ type Panel = "connections" | "preferences" | null;
  */
 const SHOW_CONNECTIONS_ENTRY = false;
 
+/** The site may be served from a subpath, e.g. a GitHub Pages project URL. */
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 interface Preferences {
   briefingTime: string;
   timeZone: string;
   emailDigest: boolean;
-  showReminders: boolean;
   showSports: boolean;
   showNews: boolean;
   weatherAlerts: boolean;
@@ -87,7 +92,6 @@ const defaultPreferences: Preferences = {
   briefingTime: "07:00",
   timeZone: "America/Chicago",
   emailDigest: true,
-  showReminders: true,
   showSports: true,
   showNews: true,
   weatherAlerts: true,
@@ -97,7 +101,6 @@ const defaultPreferences: Preferences = {
 const providerIcon: Record<ProviderId, typeof CalendarDays> = {
   ical: CalendarDays,
   "apple-calendar": CalendarDays,
-  "apple-shortcut": Bell,
   weather: CloudSun,
   sports: Trophy,
   news: Newspaper,
@@ -300,24 +303,21 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
   const [changingDay, setChangingDay] = useState(false);
   const [showAllSports, setShowAllSports] = useState(false);
   const [showAllReleases, setShowAllReleases] = useState(false);
-  const [completedReminders, setCompletedReminders] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const nowMs = useNow(Date.parse(initialPayload.briefing.generatedAt));
-  const currentLocationRef = useRef<CurrentLocationInput | undefined>(undefined);
+  const localWeatherRef = useRef<LiveWeather | undefined>(undefined);
 
   const { briefing, connections } = payload;
   const {
     agenda,
     headlines,
     hourlyWeather,
-    reminders,
     sports,
     weather,
   } = briefing;
   const timeZone = preferences.timeZone || briefing.timeZone;
   const icalConnection = connectionFor(connections, "ical");
   const homeCalendarConnection = connectionFor(connections, "apple-calendar");
-  const appleReminderConnection = connectionFor(connections, "apple-shortcut");
 
   // Rendered from the date key at midday UTC so the label always names the day
   // being shown, independent of the viewer's own zone.
@@ -347,7 +347,6 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
   useEffect(() => {
     const hydrateTimer = window.setTimeout(() => {
       const savedPreferences = window.localStorage.getItem("brief-preferences");
-      const savedCompleted = window.localStorage.getItem("brief-completed-reminders");
 
       if (savedPreferences) {
         try {
@@ -365,14 +364,6 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
           window.localStorage.removeItem("brief-preferences");
         }
       }
-
-      if (savedCompleted) {
-        try {
-          setCompletedReminders(JSON.parse(savedCompleted) as string[]);
-        } catch {
-          window.localStorage.removeItem("brief-completed-reminders");
-        }
-      }
       setPreferencesReady(true);
     }, 0);
 
@@ -384,62 +375,28 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
     window.localStorage.setItem("brief-preferences", JSON.stringify(preferences));
   }, [preferences, preferencesReady]);
 
-  useEffect(() => {
-    if (!preferencesReady) return;
-    window.localStorage.setItem(
-      "brief-completed-reminders",
-      JSON.stringify(completedReminders),
-    );
-  }, [completedReminders, preferencesReady]);
-
+  // The baked-in weather is for the configured location. Where the browser
+  // allows it, fetch the forecast for wherever the viewer actually is.
   useEffect(() => {
     let disposed = false;
-    const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    async function loadLocationBriefing(location: CurrentLocationInput) {
-      currentLocationRef.current = location;
-      try {
-        const response = await fetch("/api/briefing", {
-          method: "POST",
-          cache: "no-store",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(location),
-        });
-        if (!response.ok) throw new Error("Location briefing failed");
-        const locationPayload = (await response.json()) as BriefingPayload;
-        if (disposed) return;
-        setPayload(locationPayload);
-        setPreferences((current) => ({
-          ...current,
-          timeZone: locationPayload.briefing.timeZone,
-        }));
-      } catch {
-        if (disposed) return;
-        setToast("Current-location weather could not be loaded");
-        window.setTimeout(() => setToast(null), 3600);
-      }
-    }
-
-    if (!("geolocation" in navigator)) {
-      void loadLocationBriefing({ timeZone: browserTimeZone });
-      return () => {
-        disposed = true;
-      };
-    }
+    if (!("geolocation" in navigator)) return;
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        void loadLocationBriefing({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          timeZone: browserTimeZone,
-        });
+      async (position) => {
+        const local = await fetchLocalWeather(
+          position.coords.latitude,
+          position.coords.longitude,
+        );
+        if (disposed) return;
+        if (!local) {
+          setToast("Current-location weather could not be loaded");
+          window.setTimeout(() => setToast(null), 3600);
+          return;
+        }
+        localWeatherRef.current = local;
+        setPayload((current) => withLocalWeather(current, local));
       },
       () => {
-        void loadLocationBriefing({ timeZone: browserTimeZone });
         setToast("Location permission was unavailable; using the configured weather location");
         window.setTimeout(() => setToast(null), 4200);
       },
@@ -472,16 +429,20 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
     setPreferences((current) => ({ ...current, [key]: value }));
   }
 
-  /** Single request path, so refreshing and paging always agree on location. */
+  /**
+   * Single request path, so refreshing and paging always agree on location.
+   * Each day is a static file written by the last scheduled build.
+   */
   async function loadBriefing(date: string): Promise<BriefingPayload> {
-    const response = await fetch("/api/briefing", {
-      method: "POST",
+    const response = await fetch(`${BASE_PATH}/briefing/${date}.json`, {
       cache: "no-store",
-      headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ ...(currentLocationRef.current ?? {}), date }),
+      headers: { Accept: "application/json" },
     });
     if (!response.ok) throw new Error("Briefing request failed");
-    return (await response.json()) as BriefingPayload;
+    const loaded = (await response.json()) as BriefingPayload;
+    return localWeatherRef.current
+      ? withLocalWeather(loaded, localWeatherRef.current)
+      : loaded;
   }
 
   async function refreshBriefing(showNotification = true) {
@@ -489,9 +450,9 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
     setRefreshing(true);
     try {
       setPayload(await loadBriefing(briefing.date));
-      if (showNotification) notify("Live sources refreshed");
+      if (showNotification) notify("Briefing reloaded");
     } catch {
-      notify("Could not refresh live sources; the last briefing is still shown");
+      notify("Could not reload the briefing; the last one is still shown");
     } finally {
       setRefreshing(false);
     }
@@ -517,21 +478,11 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
     notify(`${source} will open here after the account is connected`);
   }
 
-  function toggleReminder(id: string) {
-    setCompletedReminders((current) =>
-      current.includes(id)
-        ? current.filter((reminderId) => reminderId !== id)
-        : [...current, id],
-    );
-  }
-
   function resetDemo() {
     setPreferences(defaultPreferences);
-    setCompletedReminders([]);
     setShowAllSports(false);
     setShowAllReleases(false);
     window.localStorage.removeItem("brief-preferences");
-    window.localStorage.removeItem("brief-completed-reminders");
     notify("Prototype preferences reset");
   }
 
@@ -612,8 +563,7 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
                   <Link2 size={16} />
                   <span>Connections</span>
                   {(icalConnection?.state !== "connected" ||
-                    homeCalendarConnection?.state !== "connected" ||
-                    appleReminderConnection?.state !== "connected") && (
+                    homeCalendarConnection?.state !== "connected") && (
                     <span className="setup-dot" aria-label="Setup needed" />
                   )}
                 </button>
@@ -830,34 +780,6 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
                 {showNowMarker && nowMarkerIndex === -1 && nowMarker}
               </div>
             </section>
-
-            {preferences.showReminders && (
-              <section className="card reminders-card" aria-labelledby="reminders-title">
-                <SectionHeading
-                  title="Reminders"
-                  action={<span className="item-count">{reminders.length}</span>}
-                />
-                <div className="reminder-list">
-                  {reminders.map((item) => {
-                    const isComplete = completedReminders.includes(item.id);
-                    return (
-                      <label className={`reminder-item ${isComplete ? "reminder-complete" : ""}`} key={item.id}>
-                        <input
-                          type="checkbox"
-                          checked={isComplete}
-                          onChange={() => toggleReminder(item.id)}
-                        />
-                        <span className="custom-check" aria-hidden="true"><Check size={13} /></span>
-                        <span className="reminder-copy">
-                          <strong>{item.title}</strong>
-                          <small>{item.dueLabel} · {item.listLabel}</small>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
 
             {preferences.showSports && sports.length > 0 && (
               <section className="card sports-card" aria-labelledby="sports-title">
@@ -1265,7 +1187,7 @@ function ConnectionsPanel({
         <ShieldCheck size={18} />
         <div>
           <strong>Least access by default</strong>
-          <p>Daily Briefing reads the private iCal feed on the server, keeps only a short in-memory event cache, and never stores the raw calendar.</p>
+          <p>Daily Briefing reads the private iCal feed only while the site is built and never publishes the feed address or the raw calendar.</p>
         </div>
       </div>
     </div>
@@ -1317,17 +1239,6 @@ function ConnectorCard({
       return;
     }
 
-    if (connector.id === "apple-shortcut") {
-      if (state === "connected") {
-        onNotify("Apple Reminders is supplying a live Shortcut snapshot");
-      } else if (state === "not-configured") {
-        onNotify("Add APPLE_SHORTCUT_TOKEN to .env.local, then restart Daily Briefing");
-      } else {
-        onNotify(connection?.message ?? "Run the Apple Reminders Shortcut once");
-      }
-      return;
-    }
-
     onNotify(
       state === "connected"
         ? `${connector.name} is supplying live data`
@@ -1361,10 +1272,6 @@ function ConnectorCard({
             ? state === "connected"
               ? "Live feed active"
               : "Configure iCal feed"
-            : connector.id === "apple-shortcut"
-              ? state === "connected"
-                ? "Live snapshot active"
-                : "Configure Shortcut"
             : state === "connected"
               ? "Live data active"
               : "View implementation note"}
@@ -1418,7 +1325,6 @@ function PreferencesPanel({
 
       <section className="settings-section">
         <h3>Sections</h3>
-        <PreferenceToggle label="Reminders" checked={preferences.showReminders} onChange={(checked) => updatePreference("showReminders", checked)} />
         <PreferenceToggle label="Sports" checked={preferences.showSports} onChange={(checked) => updatePreference("showSports", checked)} />
         <PreferenceToggle label="Headlines" checked={preferences.showNews} onChange={(checked) => updatePreference("showNews", checked)} />
       </section>

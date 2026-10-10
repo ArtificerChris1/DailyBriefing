@@ -3,7 +3,6 @@ import type {
   ConnectorDefinition,
   HourlyWeatherPoint,
   NewsItem,
-  ReminderItem,
   SportsItem,
   WeatherItem,
 } from "@/lib/briefing-types";
@@ -80,45 +79,6 @@ export const agenda: CalendarItem[] = [
       provider: "apple-calendar",
       connectionId: "demo-apple-family",
       externalId: "demo-event-3",
-      fetchedAt,
-    },
-  },
-];
-
-export const reminders: ReminderItem[] = [
-  {
-    id: "reminder-2",
-    kind: "reminder",
-    title: "Refill prescription",
-    dueLabel: "Due today",
-    completed: false,
-    listLabel: "Personal",
-    zone: "personal",
-    sensitivity: "private",
-    importance: "normal",
-    surfacedBecause: "Due today",
-    source: {
-      provider: "apple-shortcut",
-      connectionId: "demo-apple",
-      externalId: "demo-reminder-1",
-      fetchedAt,
-    },
-  },
-  {
-    id: "reminder-3",
-    kind: "reminder",
-    title: "Order team snacks",
-    dueLabel: "Before 4:00 PM",
-    completed: false,
-    listLabel: "Family",
-    zone: "personal",
-    sensitivity: "private",
-    importance: "normal",
-    surfacedBecause: "Needed for tomorrow",
-    source: {
-      provider: "apple-shortcut",
-      connectionId: "demo-apple",
-      externalId: "demo-reminder-2",
       fetchedAt,
     },
   },
@@ -517,7 +477,7 @@ export const connectors: ConnectorDefinition[] = [
     zone: "work",
     capabilities: ["Calendar", "Recurring events", "Read-only feed"],
     permissionNote:
-      "The private feed address stays on the server and is never sent to the browser.",
+      "The private feed address is read only by the build and never published with the site.",
   },
   {
     id: "apple-calendar",
@@ -527,17 +487,7 @@ export const connectors: ConnectorDefinition[] = [
     zone: "personal",
     capabilities: ["Home calendar", "Recurring events", "Read-only feed"],
     permissionNote:
-      "The private iCloud feed address stays on the server and is never sent to the browser.",
-  },
-  {
-    id: "apple-shortcut",
-    name: "Apple Reminders",
-    description: "An authenticated iPhone Shortcut sends selected reminders.",
-    state: "not-connected",
-    zone: "personal",
-    capabilities: ["Selected reminder lists"],
-    permissionNote:
-      "The encrypted snapshot contains selected reminder fields; no Apple password is stored.",
+      "The private iCloud feed address is read only by the build and never published with the site.",
   },
   {
     id: "weather",

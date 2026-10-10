@@ -6,7 +6,7 @@
     "dev": "next dev",
     "dev:lan": "next dev --hostname 0.0.0.0",
     "build": "next build",
-    "start": "next start",
+    "preview": "npx --yes serve@14.2.4 out",
     "lint": "eslint ."
   },
   "dependencies": {

@@ -215,7 +215,6 @@ async function downloadFeed(feed: FeedDefinition, timeoutMs: number): Promise<st
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(feed.url, {
-      cache: "no-store",
       headers: {
         Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml",
         "User-Agent": "Brief-Daily-News/1.0",

@@ -1,12 +1,11 @@
 # Brief
 
-A private, mobile-first daily briefing that combines work and home calendars, hourly weather, reminders, sports, and headlines in one focused view.
+A private, mobile-first daily briefing that combines work and home calendars, hourly weather, sports, and headlines in one focused view. It is a static site: a scheduled GitHub Actions job rebuilds it each morning and publishes it to GitHub Pages, so there is no server to run or pay for.
 
 ## What is live now
 
 - Open-Meteo supplies current conditions, feels-like temperature, and hourly weather aligned to the calendar timeline.
 - Private iCal subscriptions can supply today's work calendar and Apple home/family calendar, including recurring events and exceptions.
-- An authenticated iPhone Shortcut can send incomplete Apple Reminders to encrypted local storage.
 - TheSportsDB, MLB Stats, NHL, Iowa State Athletics, FIFA, and LA28 sources supply favorite-team schedules, results, tournament dates, and available standings.
 - Selected publisher RSS feeds supply current, attributed progressive/global and geek-culture headlines.
 - Outlook email and Teams messages are out of scope because organizational approval is unavailable.
@@ -24,7 +23,7 @@ npm.cmd run dev
 
 Open `http://localhost:3000`. After any `.env.local` change, stop the development server with `Ctrl+C` and start it again.
 
-Weather works without an API key. See [Apple setup](docs/apple-setup.md) to connect the home calendar and Reminders.
+Weather works without an API key. See [Apple setup](docs/apple-setup.md) to connect the home calendar.
 
 ## Connect the work calendar with iCal
 
@@ -40,11 +39,11 @@ WORK_CALENDAR_ICAL_CACHE_SECONDS=300
 
 4. Restart the development server and refresh the dashboard. **Connections** should show **Work calendar (iCal) — Connected**.
 
-Treat every iCal URL like a password. Brief fetches it only on the server, does not expose it to the browser, does not persist the raw feed, and caches only normalized events overlapping the current day. Revoke and republish a feed if its URL is exposed.
+Treat every iCal URL like a password. Brief fetches it only during the build, never ships the address to the browser, does not persist the raw feed, and caches only normalized events overlapping the current day. Revoke and republish a feed if its URL is exposed.
 
 ## Weather configuration
 
-On localhost, the browser requests location permission and sends the current coordinates to the server for an Open-Meteo lookup. Brief uses the forecast time zone, keeps coordinates only in browser memory for the open page, and does not return them in the briefing API.
+The build bakes in the forecast for the configured location below. When the browser grants location permission, it asks Open-Meteo directly for the forecast at your current coordinates (rounded to about 1 km for the place-name lookup) and swaps it in. Coordinates stay in browser memory for the open page and are never published.
 
 If location permission is unavailable, the default is Chicago, Illinois. Override the fallback in `.env.local`:
 
@@ -61,11 +60,26 @@ OPEN_METEO_CACHE_SECONDS=900
 
 Use an IANA time-zone name such as `America/Chicago`. Forecast days can be 1–16, and temperature can be `fahrenheit` or `celsius`.
 
+## Deploy to GitHub Pages
+
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml) builds the site with `next build` and publishes the `out/` folder. It runs daily at 10:00 UTC (5am Central in summer, 4am in winter), on every push to `main`, and on demand from the **Actions** tab.
+
+Every provider runs during that build, so the briefing is a snapshot: scores, calendars, and headlines are as fresh as the last run. Each page of the day pager is a static file, `/briefing/YYYY-MM-DD.json`, covering a week back and two weeks ahead. Weather is the one live part: when the browser allows location access, it fetches the forecast for where you are straight from Open-Meteo.
+
+One-time setup:
+
+1. In the repository, open **Settings > Pages** and set **Source** to **GitHub Actions**.
+2. Under **Settings > Secrets and variables > Actions**, add each credential you use as a repository **secret**: `WORK_CALENDAR_ICAL_URL`, `HOME_CALENDAR_ICAL_URL`, `API_NINJAS_KEY`, `BGG_API_TOKEN`, `TMDB_ACCESS_TOKEN` or `TMDB_API_KEY`, `COMICVINE_API_KEY`, `THESPORTSDB_API_KEY`.
+3. Optionally add repository **variables** for `OPEN_METEO_LATITUDE`, `OPEN_METEO_LONGITUDE`, `OPEN_METEO_LOCATION`, `OPEN_METEO_TIMEZONE`, `OPEN_METEO_TEMPERATURE_UNIT`, `TMDB_REGION`, and `COMICVINE_PUBLISHERS`.
+4. Run the workflow once from the **Actions** tab.
+
+GitHub Pages sites are public. Credentials stay in secrets and never reach the site, but what they produce—calendar event titles, birthdays, and everything else on the page—is readable by anyone with the URL. On GitHub's free plan, Pages also requires the repository itself to be public.
+
+GitHub disables scheduled workflows after 60 days without repository activity; re-enable it from the **Actions** tab if the briefing stops updating.
+
 ## Local data and security
 
-Private feed addresses and the Shortcut token live only in Git-ignored `.env.local`. Raw calendars are not persisted. Reminder snapshots are authenticated, encrypted with AES-256-GCM before being stored, and unreadable without the Shortcut token.
-
-The encrypted snapshot is written to `.data/apple-reminders.enc` by default. Set `KV_REST_API_URL` and `KV_REST_API_TOKEN` to store it in Redis instead, which is required on a serverless host such as Vercel because the deployment filesystem is read-only. Either way the store only ever holds ciphertext. See [Apple setup](docs/apple-setup.md) for the details.
+Private feed addresses live only in Git-ignored `.env.local` locally and in repository secrets for the deployed build. Raw calendars are not persisted, and calendar errors are reported without the feed address.
 
 Sports and headline feeds need no private credentials. Brief uses TheSportsDB's documented free key against their v1 API unless `THESPORTSDB_API_KEY` is set, in which case team schedules come from the premium v2 API. It combines either with official MLB/NHL data and caches public results for 15 minutes. Headlines contain publisher-provided titles, dates, attribution, and canonical links—not copied article bodies.
 
@@ -74,12 +88,15 @@ Sports and headline feeds need no private credentials. Brief uses TheSportsDB's 
 ```powershell
 npm.cmd run lint
 npm.cmd run build
+npm.cmd run preview
 ```
+
+`preview` serves the built `out/` folder at `http://localhost:3000`.
 
 ## Next integrations
 
 1. Add live match-by-match and medal-table coverage when World Cups or Olympics are active.
 2. Expand standings coverage and replace supporting sports data with licensed feeds before public distribution.
-3. Generate and schedule a privacy-safe daily notification or email.
+3. Send a privacy-safe daily notification or email from the scheduled build.
 
 Raw provider responses and private content sent to external AI services remain excluded by default.

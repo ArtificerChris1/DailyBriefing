@@ -1,0 +1,80 @@
+# Builds the briefing as a static site and publishes it to GitHub Pages.
+#
+# Every provider runs here, during `next build`, so the published site holds
+# no credentials: private calendar URLs and API keys live in repository
+# secrets and only ever reach this job. What they produce (event titles,
+# scores, headlines) is baked into the pages and is visible to anyone with
+# the site's URL.
+name: Build and deploy briefing
+
+on:
+  schedule:
+    # 10:00 UTC is 5am Central during daylight saving time and 4am in winter.
+    # GitHub may start scheduled runs some minutes late.
+    - cron: "0 10 * * *"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a newer run supersedes a queued one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - id: pages
+        uses: actions/configure-pages@v5
+
+      - run: npm ci
+
+      - name: Build static site
+        run: npm run build
+        env:
+          # The project site is served from /<repo>, which configure-pages reports.
+          NEXT_PUBLIC_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          WORK_CALENDAR_ICAL_URL: ${{ secrets.WORK_CALENDAR_ICAL_URL }}
+          HOME_CALENDAR_ICAL_URL: ${{ secrets.HOME_CALENDAR_ICAL_URL }}
+          API_NINJAS_KEY: ${{ secrets.API_NINJAS_KEY }}
+          BGG_API_TOKEN: ${{ secrets.BGG_API_TOKEN }}
+          TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          COMICVINE_API_KEY: ${{ secrets.COMICVINE_API_KEY }}
+          THESPORTSDB_API_KEY: ${{ secrets.THESPORTSDB_API_KEY }}
+          # Non-secret settings, from repository variables. Unset ones fall
+          # back to the defaults documented in .env.example.
+          OPEN_METEO_LATITUDE: ${{ vars.OPEN_METEO_LATITUDE }}
+          OPEN_METEO_LONGITUDE: ${{ vars.OPEN_METEO_LONGITUDE }}
+          OPEN_METEO_LOCATION: ${{ vars.OPEN_METEO_LOCATION }}
+          OPEN_METEO_TIMEZONE: ${{ vars.OPEN_METEO_TIMEZONE }}
+          OPEN_METEO_TEMPERATURE_UNIT: ${{ vars.OPEN_METEO_TEMPERATURE_UNIT }}
+          TMDB_REGION: ${{ vars.TMDB_REGION }}
+          COMICVINE_PUBLISHERS: ${{ vars.COMICVINE_PUBLISHERS }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

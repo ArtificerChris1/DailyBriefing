@@ -182,7 +182,6 @@ async function fetchJson<T>(
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
-      cache: "no-store",
       headers: {
         Accept: "application/json",
         "User-Agent": "Brief-Daily-Sports/1.0",
@@ -578,7 +577,6 @@ async function downloadHtml(url: string, timeoutMs: number): Promise<string> {
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
-      cache: "no-store",
       headers: {
         Accept: "text/html",
         "User-Agent": "Brief-Daily-Sports/1.0",

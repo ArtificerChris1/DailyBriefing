@@ -1,7 +1,6 @@
 export type ProviderId =
   | "ical"
   | "apple-calendar"
-  | "apple-shortcut"
   | "weather"
   | "sports"
   | "news";
@@ -50,13 +49,6 @@ export interface CalendarItem extends BaseItem<"calendar"> {
   status: "confirmed" | "tentative" | "cancelled";
   locationLabel?: string;
   sourceLabel: string;
-}
-
-export interface ReminderItem extends BaseItem<"reminder"> {
-  dueAt?: string;
-  dueLabel?: string;
-  completed: boolean;
-  listLabel?: string;
 }
 
 export interface WeatherItem extends BaseItem<"weather"> {
@@ -207,7 +199,6 @@ export interface QuoteOfDay {
 
 export type BriefingItem =
   | CalendarItem
-  | ReminderItem
   | WeatherItem
   | SportsItem
   | NewsItem;
@@ -256,7 +247,6 @@ export interface BriefingSnapshot {
   upcomingReleases?: UpcomingReleasesPanel;
   birthdays: BirthdaysPanel;
   agenda: CalendarItem[];
-  reminders: ReminderItem[];
   weather: WeatherItem;
   hourlyWeather: HourlyWeatherPoint[];
   sports: SportsItem[];
@@ -269,14 +259,7 @@ export interface BriefingPayload {
   connections: ConnectionSummary[];
 }
 
-export interface CurrentLocationInput {
-  latitude?: number;
-  longitude?: number;
-  timeZone?: string;
-}
-
 export interface BriefingRequest {
-  location?: CurrentLocationInput;
   /** `YYYY-MM-DD` in the resolved time zone. Defaults to today. */
   date?: string;
 }

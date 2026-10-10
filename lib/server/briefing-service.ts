@@ -6,9 +6,7 @@ import type {
   BriefingSourceStatus,
   CalendarItem,
   ConnectionSummary,
-  CurrentLocationInput,
   HourlyWeatherPoint,
-  ReminderItem,
   SportsItem,
   WeatherItem,
 } from "@/lib/briefing-types";
@@ -22,10 +20,10 @@ import {
   agenda as demoAgenda,
   headlines,
   hourlyWeather as demoHourlyWeather,
-  reminders,
   sports,
   weather as demoWeather,
 } from "@/lib/demo-data";
+import { dateInTimeZone, weatherForDate } from "@/lib/live-weather";
 import { birthdaysInWindow } from "@/lib/providers/birthdays/birthday-list";
 import { fetchIcalCalendar } from "@/lib/providers/ical/calendar";
 import { fetchRssHeadlines } from "@/lib/providers/news/rss-headlines";
@@ -33,28 +31,8 @@ import { fetchBggHotness } from "@/lib/providers/games/bgg-hotness";
 import { fetchQuoteOfTheDay } from "@/lib/providers/quotes/quote-of-the-day";
 import { fetchUpcomingReleases } from "@/lib/providers/releases/upcoming-releases";
 import { fetchLiveSports } from "@/lib/providers/sports/live-sports";
-import type { DailyWeatherSummary } from "@/lib/providers/weather/open-meteo";
 import { fetchOpenMeteoWeather } from "@/lib/providers/weather/open-meteo";
-import { reverseGeocode } from "@/lib/providers/weather/reverse-geocode";
 import { recencyCutoff, withinRecencyWindow } from "@/lib/recency";
-import { getAppleReminderStoreStatus } from "@/lib/server/apple-reminders-store";
-
-function datePartsInTimeZone(value: Date, timeZone: string) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone,
-  }).formatToParts(value);
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((item) => item.type === type)?.value ?? "";
-  return { year: part("year"), month: part("month"), day: part("day") };
-}
-
-function dateInTimeZone(value: Date, timeZone: string): string {
-  const { year, month, day } = datePartsInTimeZone(value, timeZone);
-  return `${year}-${month}-${day}`;
-}
 
 function nextDate(date: string): string {
   const [year, month, day] = date.split("-").map(Number);
@@ -175,22 +153,6 @@ function validTimeZone(value: string | undefined): value is string {
   }
 }
 
-function validCoordinates(location: CurrentLocationInput | undefined): location is {
-  latitude: number;
-  longitude: number;
-  timeZone?: string;
-} {
-  return Boolean(
-    location &&
-      Number.isFinite(location.latitude) &&
-      Number.isFinite(location.longitude) &&
-      location.latitude! >= -90 &&
-      location.latitude! <= 90 &&
-      location.longitude! >= -180 &&
-      location.longitude! <= 180,
-  );
-}
-
 function calendarStart(item: CalendarItem): number {
   return item.time.mode === "timed"
     ? Date.parse(item.time.start)
@@ -221,92 +183,19 @@ function sportsInWindow(
   });
 }
 
-/**
- * The live `WeatherItem` describes right now, which is meaningless on any other
- * day. When the pager moves off today, restate the card from that day's summary:
- * the headline number becomes the forecast high rather than a current reading.
- */
-function weatherForDay(
-  current: WeatherItem,
-  day: DailyWeatherSummary,
-): WeatherItem {
-  return {
-    ...current,
-    id: `open-meteo-weather-${day.startsOn}`,
-    title: `${day.condition} in ${current.location}`,
-    condition: day.condition,
-    temperature: day.high,
-    feelsLike: day.feelsLikeHigh,
-    high: day.high,
-    low: day.low,
-    precipitationChance: day.precipitationChance,
-    importance:
-      day.condition === "Thunderstorms" || day.precipitationChance >= 70
-        ? "high"
-        : "normal",
-    surfacedBecause: "Daily forecast for the selected day",
-    source: { ...current.source, externalId: `open-meteo:${day.startsOn}` },
-  };
-}
-
-function reminderWithDueLabel(
-  reminder: ReminderItem,
-  timeZone: string,
-  today: string,
-): ReminderItem {
-  if (!reminder.dueAt) return reminder;
-  const due = new Date(reminder.dueAt);
-  const dueDate = dateInTimeZone(due, timeZone);
-  const dueLabel =
-    dueDate === today
-      ? `Due ${new Intl.DateTimeFormat("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-          timeZone,
-        }).format(due)}`
-      : `Due ${new Intl.DateTimeFormat("en-US", {
-          month: "short",
-          day: "numeric",
-          timeZone,
-        }).format(due)}`;
-  return { ...reminder, dueLabel };
-}
-
 export async function getBriefingPayload(
   options: BriefingRequest = {},
 ): Promise<BriefingPayload> {
   const generatedAt = new Date().toISOString();
-  const requestedLocation = options.location;
-  const hasCoordinates = validCoordinates(requestedLocation);
-  const requestedTimeZone = validTimeZone(requestedLocation?.timeZone)
-    ? requestedLocation.timeZone
-    : undefined;
-  // Name the coordinates before asking for weather, so the card can say
-  // "Current location (Madison, WI)" rather than just "Current location".
-  const observedPlace = hasCoordinates
-    ? await reverseGeocode(requestedLocation.latitude, requestedLocation.longitude)
-    : undefined;
   const weatherResult = await fetchOpenMeteoWeather({
-    config: hasCoordinates
-      ? {
-          latitude: requestedLocation.latitude,
-          longitude: requestedLocation.longitude,
-          location: observedPlace
-            ? `Current location (${observedPlace})`
-            : "Current location",
-          timeZone: "auto",
-          pastDays: WEATHER_PAST_DAYS,
-          forecastDays: WEATHER_FORECAST_DAYS,
-        }
-      : {
-          ...(requestedTimeZone ? { timeZone: requestedTimeZone } : {}),
-          pastDays: WEATHER_PAST_DAYS,
-          forecastDays: WEATHER_FORECAST_DAYS,
-        },
+    config: {
+      pastDays: WEATHER_PAST_DAYS,
+      forecastDays: WEATHER_FORECAST_DAYS,
+    },
   });
   const timeZone = validTimeZone(weatherResult.metadata.timeZone)
     ? weatherResult.metadata.timeZone
-    : requestedTimeZone ?? "America/Chicago";
+    : "America/Chicago";
   const today = dateInTimeZone(new Date(generatedAt), timeZone);
   const date = isDateKey(options.date)
     ? clampToWindow(today, options.date)
@@ -316,7 +205,6 @@ export async function getBriefingPayload(
   const [
     icalResult,
     homeCalendarResult,
-    appleReminderStatus,
     sportsResult,
     headlineResult,
     quoteResult,
@@ -325,7 +213,6 @@ export async function getBriefingPayload(
   ] = await Promise.all([
     fetchIcalCalendar({ feed: "work", from, to, timeZone }),
     fetchIcalCalendar({ feed: "home", from, to, timeZone }),
-    getAppleReminderStoreStatus(),
     fetchLiveSports(timeZone),
     fetchRssHeadlines(),
     fetchQuoteOfTheDay(),
@@ -401,45 +288,13 @@ export async function getBriefingPayload(
       ? homeCalendarResult.warnings[0]
       : homeCalendarResult.error,
   };
-  const appleReminderSource: BriefingSourceStatus = {
-    provider: "apple-shortcut",
-    capability: "reminders",
-    label: "Apple Reminders Shortcut",
-    state:
-      appleReminderStatus.state === "connected"
-        ? "live"
-        : appleReminderStatus.state,
-    lastSyncedAt: appleReminderStatus.lastSyncedAt,
-    message: appleReminderStatus.message,
-  };
-  const appleReminderConnection: ConnectionSummary = {
-    provider: "apple-shortcut",
-    state: appleReminderStatus.state,
-    accountLabel: appleReminderStatus.connected
-      ? "iPhone Shortcut"
-      : undefined,
-    lastSyncedAt: appleReminderStatus.lastSyncedAt,
-    message: appleReminderStatus.message,
-  };
-  const briefingReminders = appleReminderStatus.connected
-    ? appleReminderStatus.items
-        .filter((reminder) => !reminder.completed)
-        .map((reminder) => reminderWithDueLabel(reminder, timeZone, date))
-    : reminders;
 
-  const selectedDay = weatherResult.ok
-    ? weatherResult.dailyWeather.find((day) => day.startsOn === date)
-    : undefined;
-  const weather = !weatherResult.ok
-    ? demoWeatherFor(generatedAt)
-    : date === today || !selectedDay
-      ? weatherResult.weather
-      : weatherForDay(weatherResult.weather, selectedDay);
-  const hourlyWeather = weatherResult.ok
-    ? weatherResult.hourlyWeather.filter(
-        (point) => dateInTimeZone(new Date(point.startsAt), timeZone) === date,
-      )
-    : rebaseDemoHourlyWeather(date, timeZone);
+  const { weather, hourlyWeather } = weatherResult.ok
+    ? weatherForDate(weatherResult, date, today, timeZone)
+    : {
+        weather: demoWeatherFor(generatedAt),
+        hourlyWeather: rebaseDemoHourlyWeather(date, timeZone),
+      };
   const weatherSource: BriefingSourceStatus = weatherResult.ok
     ? {
         provider: "weather",
@@ -537,7 +392,6 @@ export async function getBriefingPayload(
   const sources: BriefingSourceStatus[] = [
     icalSource,
     homeCalendarSource,
-    appleReminderSource,
     weatherSource,
     sportsSource,
     headlineSource,
@@ -558,7 +412,6 @@ export async function getBriefingPayload(
       birthdays: birthdaysInWindow(date),
       upcomingReleases,
       agenda: recentAgenda,
-      reminders: briefingReminders,
       weather,
       hourlyWeather,
       sports: recentSports,
@@ -568,7 +421,6 @@ export async function getBriefingPayload(
     connections: [
       icalConnection,
       homeCalendarConnection,
-      appleReminderConnection,
       weatherConnection,
       sportsConnection,
       headlineConnection,

@@ -259,6 +259,13 @@ function normalizeInstance(
   };
 }
 
+/**
+ * A failure whose message is safe to publish. Any other error's message may
+ * quote the private feed URL, and the briefing is a public static site, so
+ * those are reported generically instead.
+ */
+class CalendarFeedError extends Error {}
+
 async function downloadFeed(
   url: string,
   timeoutMs: number,
@@ -272,21 +279,20 @@ async function downloadFeed(
         Accept: "text/calendar, text/plain;q=0.9, */*;q=0.1",
         "User-Agent": "Brief-Daily-Calendar/1.0",
       },
-      cache: "no-store",
       redirect: "follow",
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new Error(`The calendar feed returned HTTP ${response.status}.`);
+      throw new CalendarFeedError(`The calendar feed returned HTTP ${response.status}.`);
     }
 
     const declaredLength = Number(response.headers.get("content-length"));
     if (Number.isFinite(declaredLength) && declaredLength > MAX_FEED_BYTES) {
-      throw new Error("The calendar feed is larger than the 5 MB safety limit.");
+      throw new CalendarFeedError("The calendar feed is larger than the 5 MB safety limit.");
     }
     const body = await response.text();
     if (Buffer.byteLength(body, "utf8") > MAX_FEED_BYTES) {
-      throw new Error("The calendar feed is larger than the 5 MB safety limit.");
+      throw new CalendarFeedError("The calendar feed is larger than the 5 MB safety limit.");
     }
     return body;
   } finally {
@@ -403,7 +409,7 @@ export async function fetchIcalCalendar(input: {
     const message =
       error instanceof Error && error.name === "AbortError"
         ? `The calendar feed did not respond within ${configuration.timeoutMs} ms.`
-        : error instanceof Error
+        : error instanceof CalendarFeedError
           ? error.message
           : "The calendar feed could not be read.";
     return {

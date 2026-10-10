@@ -1,11 +1,9 @@
-import "server-only";
-
 const REVERSE_GEOCODE_URL =
   "https://api.bigdatacloud.net/data/reverse-geocode-client";
 const DEFAULT_TIMEOUT_MS = 4_000;
 const CACHE_SECONDS = 24 * 60 * 60;
 /**
- * ~1km of precision. Coordinates are rounded before they leave the server so a
+ * ~1km of precision. Coordinates are rounded before they leave the device so a
  * drifting GPS fix cannot turn into a stream of distinct lookups, and so the
  * cache actually hits while you stay in one place.
  */
