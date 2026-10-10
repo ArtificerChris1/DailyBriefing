@@ -490,6 +490,16 @@ export const connectors: ConnectorDefinition[] = [
       "The private iCloud feed address is read only by the build and never published with the site.",
   },
   {
+    id: "apple-shortcut",
+    name: "Apple Reminders",
+    description: "An iPhone Shortcut sends open reminders to the daily build.",
+    state: "not-connected",
+    zone: "personal",
+    capabilities: ["Selected reminder lists"],
+    permissionNote:
+      "Saved encrypted in the repository; the reminder text itself appears on the site.",
+  },
+  {
     id: "weather",
     name: "Weather",
     description: "Hourly conditions aligned directly with calendar events.",

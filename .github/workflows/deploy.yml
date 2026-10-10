@@ -15,20 +15,20 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # Sent by the Apple Reminders Shortcut; see docs/apple-setup.md.
+  repository_dispatch:
+    types: [reminders]
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-# One deployment at a time; a newer run supersedes a queued one.
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      # Write access only to replace the encrypted reminders snapshot.
+      contents: write
+      pages: read
     # The credentials are stored as github-pages environment secrets, which a
     # job only receives when it names that environment.
     environment: github-pages
@@ -45,6 +45,33 @@ jobs:
 
       - run: npm ci
 
+      # The Shortcut's reminders arrive in the event file, which is read from
+      # disk rather than passed in the environment so they never appear in
+      # the public run log. They are encrypted and force-pushed as the only
+      # commit on reminders-data, replacing the previous snapshot.
+      - name: Save reminders sent by the Shortcut
+        if: github.event_name == 'repository_dispatch'
+        env:
+          REMINDERS_KEY: ${{ secrets.REMINDERS_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/save-reminders.ts "$GITHUB_EVENT_PATH" .data/reminders.enc
+          cd .data
+          git init -q -b reminders-data
+          git add reminders.enc
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Update reminders snapshot"
+          git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" reminders-data
+
+      - name: Load the last saved reminders
+        if: github.event_name != 'repository_dispatch'
+        run: |
+          mkdir -p .data
+          if git fetch -q --depth 1 origin reminders-data; then
+            git show FETCH_HEAD:reminders.enc > .data/reminders.enc
+          else
+            echo "No reminders have been saved yet."
+          fi
+
       - name: Build static site
         run: npm run build
         env:
@@ -58,6 +85,8 @@ jobs:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           COMICVINE_API_KEY: ${{ secrets.COMICVINE_API_KEY }}
           THESPORTSDB_API_KEY: ${{ secrets.THESPORTSDB_API_KEY }}
+          REMINDERS_KEY: ${{ secrets.REMINDERS_KEY }}
+          ICLOUD_SHARED_ALBUM_URL: ${{ secrets.ICLOUD_SHARED_ALBUM_URL }}
           # Non-secret settings, from repository variables. Unset ones fall
           # back to the defaults documented in .env.example.
           OPEN_METEO_LATITUDE: ${{ vars.OPEN_METEO_LATITUDE }}
@@ -75,6 +104,15 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    # One deployment at a time; a newer run supersedes a queued one. This sits
+    # on the deploy job alone so a queued build can never displace a run that
+    # still has a Shortcut's reminders to save.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

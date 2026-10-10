@@ -1,6 +1,7 @@
 export type ProviderId =
   | "ical"
   | "apple-calendar"
+  | "apple-shortcut"
   | "weather"
   | "sports"
   | "news";
@@ -49,6 +50,13 @@ export interface CalendarItem extends BaseItem<"calendar"> {
   status: "confirmed" | "tentative" | "cancelled";
   locationLabel?: string;
   sourceLabel: string;
+}
+
+export interface ReminderItem extends BaseItem<"reminder"> {
+  dueAt?: string;
+  dueLabel?: string;
+  completed: boolean;
+  listLabel?: string;
 }
 
 export interface WeatherItem extends BaseItem<"weather"> {
@@ -199,6 +207,7 @@ export interface QuoteOfDay {
 
 export type BriefingItem =
   | CalendarItem
+  | ReminderItem
   | WeatherItem
   | SportsItem
   | NewsItem;
@@ -232,6 +241,22 @@ export interface ConnectionSummary {
   message?: string;
 }
 
+export interface RemindersPanel {
+  items: ReminderItem[];
+  /** When the Shortcut last sent a snapshot. */
+  syncedAt: string;
+}
+
+export interface PhotoOfDay {
+  /** Site-relative path of the image file written by the build. */
+  src: string;
+  width: number;
+  height: number;
+  caption?: string;
+  takenAt?: string;
+  albumName?: string;
+}
+
 export interface BriefingSnapshot {
   generatedAt: string;
   /** The day being shown, which the pager can move away from today. */
@@ -246,6 +271,10 @@ export interface BriefingSnapshot {
   /** Absent entirely when no release source is configured. */
   upcomingReleases?: UpcomingReleasesPanel;
   birthdays: BirthdaysPanel;
+  /** Absent until a reminder key is configured and the Shortcut has run. */
+  reminders?: RemindersPanel;
+  /** Today's page only, and only when a shared album is configured. */
+  photo?: PhotoOfDay;
   agenda: CalendarItem[];
   weather: WeatherItem;
   hourlyWeather: HourlyWeatherPoint[];

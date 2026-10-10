@@ -3,6 +3,7 @@
 import Image from "next/image";
 import {
   ArrowUpRight,
+  Bell,
   BookOpen,
   Cake,
   CalendarDays,
@@ -82,6 +83,8 @@ interface Preferences {
   briefingTime: string;
   timeZone: string;
   emailDigest: boolean;
+  showReminders: boolean;
+  showPhoto: boolean;
   showSports: boolean;
   showNews: boolean;
   weatherAlerts: boolean;
@@ -92,6 +95,8 @@ const defaultPreferences: Preferences = {
   briefingTime: "07:00",
   timeZone: "America/Chicago",
   emailDigest: true,
+  showReminders: true,
+  showPhoto: true,
   showSports: true,
   showNews: true,
   weatherAlerts: true,
@@ -101,6 +106,7 @@ const defaultPreferences: Preferences = {
 const providerIcon: Record<ProviderId, typeof CalendarDays> = {
   ical: CalendarDays,
   "apple-calendar": CalendarDays,
+  "apple-shortcut": Bell,
   weather: CloudSun,
   sports: Trophy,
   news: Newspaper,
@@ -303,6 +309,7 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
   const [changingDay, setChangingDay] = useState(false);
   const [showAllSports, setShowAllSports] = useState(false);
   const [showAllReleases, setShowAllReleases] = useState(false);
+  const [completedReminders, setCompletedReminders] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const nowMs = useNow(Date.parse(initialPayload.briefing.generatedAt));
   const localWeatherRef = useRef<LiveWeather | undefined>(undefined);
@@ -318,6 +325,7 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
   const timeZone = preferences.timeZone || briefing.timeZone;
   const icalConnection = connectionFor(connections, "ical");
   const homeCalendarConnection = connectionFor(connections, "apple-calendar");
+  const reminderConnection = connectionFor(connections, "apple-shortcut");
 
   // Rendered from the date key at midday UTC so the label always names the day
   // being shown, independent of the viewer's own zone.
@@ -347,6 +355,7 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
   useEffect(() => {
     const hydrateTimer = window.setTimeout(() => {
       const savedPreferences = window.localStorage.getItem("brief-preferences");
+      const savedCompleted = window.localStorage.getItem("brief-completed-reminders");
 
       if (savedPreferences) {
         try {
@@ -364,6 +373,14 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
           window.localStorage.removeItem("brief-preferences");
         }
       }
+
+      if (savedCompleted) {
+        try {
+          setCompletedReminders(JSON.parse(savedCompleted) as string[]);
+        } catch {
+          window.localStorage.removeItem("brief-completed-reminders");
+        }
+      }
       setPreferencesReady(true);
     }, 0);
 
@@ -374,6 +391,16 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
     if (!preferencesReady) return;
     window.localStorage.setItem("brief-preferences", JSON.stringify(preferences));
   }, [preferences, preferencesReady]);
+
+  // Ticking a reminder off only hides it on this device until the Shortcut
+  // next runs; the site cannot write back to Apple Reminders.
+  useEffect(() => {
+    if (!preferencesReady) return;
+    window.localStorage.setItem(
+      "brief-completed-reminders",
+      JSON.stringify(completedReminders),
+    );
+  }, [completedReminders, preferencesReady]);
 
   // The baked-in weather is for the configured location. Where the browser
   // allows it, fetch the forecast for wherever the viewer actually is.
@@ -478,11 +505,21 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
     notify(`${source} will open here after the account is connected`);
   }
 
+  function toggleReminder(id: string) {
+    setCompletedReminders((current) =>
+      current.includes(id)
+        ? current.filter((reminderId) => reminderId !== id)
+        : [...current, id],
+    );
+  }
+
   function resetDemo() {
     setPreferences(defaultPreferences);
     setShowAllSports(false);
     setShowAllReleases(false);
+    setCompletedReminders([]);
     window.localStorage.removeItem("brief-preferences");
+    window.localStorage.removeItem("brief-completed-reminders");
     notify("Prototype preferences reset");
   }
 
@@ -563,7 +600,8 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
                   <Link2 size={16} />
                   <span>Connections</span>
                   {(icalConnection?.state !== "connected" ||
-                    homeCalendarConnection?.state !== "connected") && (
+                    homeCalendarConnection?.state !== "connected" ||
+                    reminderConnection?.state !== "connected") && (
                     <span className="setup-dot" aria-label="Setup needed" />
                   )}
                 </button>
@@ -780,6 +818,77 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
                 {showNowMarker && nowMarkerIndex === -1 && nowMarker}
               </div>
             </section>
+
+            {preferences.showReminders && briefing.reminders && (
+              <section className="card reminders-card" aria-labelledby="reminders-title">
+                <SectionHeading
+                  title="Reminders"
+                  action={<span className="item-count">{briefing.reminders.items.length}</span>}
+                />
+                {briefing.reminders.items.length === 0 ? (
+                  <p className="hotness-message" id="reminders-title">
+                    Nothing open in Apple Reminders.
+                  </p>
+                ) : (
+                  <div className="reminder-list" id="reminders-title">
+                    {briefing.reminders.items.map((item) => {
+                      const isComplete = completedReminders.includes(item.id);
+                      return (
+                        <label className={`reminder-item ${isComplete ? "reminder-complete" : ""}`} key={item.id}>
+                          <input
+                            type="checkbox"
+                            checked={isComplete}
+                            onChange={() => toggleReminder(item.id)}
+                          />
+                          <span className="custom-check" aria-hidden="true"><Check size={13} /></span>
+                          <span className="reminder-copy">
+                            <strong>{item.title}</strong>
+                            <small>{item.dueLabel} · {item.listLabel}</small>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {preferences.showPhoto && briefing.photo && (
+              <section className="card photo-card" aria-labelledby="photo-title">
+                <SectionHeading
+                  title="Photo of the day"
+                  action={
+                    briefing.photo.albumName && (
+                      <span className="watch-count">{briefing.photo.albumName}</span>
+                    )
+                  }
+                />
+                <figure className="photo-figure">
+                  <Image
+                    // The file is replaced each morning under the same name, so
+                    // the date keeps a cached copy of yesterday's from showing.
+                    src={`${BASE_PATH}${briefing.photo.src}?d=${briefing.today}`}
+                    alt={briefing.photo.caption ?? "Photo of the day"}
+                    width={briefing.photo.width}
+                    height={briefing.photo.height}
+                    unoptimized
+                  />
+                  <figcaption id="photo-title">
+                    {briefing.photo.caption && <strong>{briefing.photo.caption}</strong>}
+                    {briefing.photo.takenAt && (
+                      <small>
+                        {new Intl.DateTimeFormat("en-US", {
+                          month: "long",
+                          day: "numeric",
+                          year: "numeric",
+                          timeZone,
+                        }).format(new Date(briefing.photo.takenAt))}
+                      </small>
+                    )}
+                  </figcaption>
+                </figure>
+              </section>
+            )}
 
             {preferences.showSports && sports.length > 0 && (
               <section className="card sports-card" aria-labelledby="sports-title">
@@ -1221,6 +1330,15 @@ function ConnectorCard({
           : "Not connected";
 
   function handleConnectorAction() {
+    if (connector.id === "apple-shortcut") {
+      onNotify(
+        state === "connected"
+          ? "Apple Reminders is supplying the Shortcut’s last snapshot"
+          : connection?.message ?? "Run the Apple Reminders Shortcut once",
+      );
+      return;
+    }
+
     if (connector.id === "ical" || connector.id === "apple-calendar") {
       const isHomeCalendar = connector.id === "apple-calendar";
       if (state === "connected") {
@@ -1325,6 +1443,8 @@ function PreferencesPanel({
 
       <section className="settings-section">
         <h3>Sections</h3>
+        <PreferenceToggle label="Reminders" checked={preferences.showReminders} onChange={(checked) => updatePreference("showReminders", checked)} />
+        <PreferenceToggle label="Photo of the day" checked={preferences.showPhoto} onChange={(checked) => updatePreference("showPhoto", checked)} />
         <PreferenceToggle label="Sports" checked={preferences.showSports} onChange={(checked) => updatePreference("showSports", checked)} />
         <PreferenceToggle label="Headlines" checked={preferences.showNews} onChange={(checked) => updatePreference("showNews", checked)} />
       </section>

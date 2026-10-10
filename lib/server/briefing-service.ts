@@ -7,6 +7,7 @@ import type {
   CalendarItem,
   ConnectionSummary,
   HourlyWeatherPoint,
+  ReminderItem,
   SportsItem,
   WeatherItem,
 } from "@/lib/briefing-types";
@@ -30,9 +31,11 @@ import { fetchRssHeadlines } from "@/lib/providers/news/rss-headlines";
 import { fetchBggHotness } from "@/lib/providers/games/bgg-hotness";
 import { fetchQuoteOfTheDay } from "@/lib/providers/quotes/quote-of-the-day";
 import { fetchUpcomingReleases } from "@/lib/providers/releases/upcoming-releases";
+import { fetchPhotoOfDay } from "@/lib/providers/photos/icloud-shared-album";
 import { fetchLiveSports } from "@/lib/providers/sports/live-sports";
 import { fetchOpenMeteoWeather } from "@/lib/providers/weather/open-meteo";
 import { recencyCutoff, withinRecencyWindow } from "@/lib/recency";
+import { getReminders } from "@/lib/server/reminders";
 
 function nextDate(date: string): string {
   const [year, month, day] = date.split("-").map(Number);
@@ -183,6 +186,29 @@ function sportsInWindow(
   });
 }
 
+function reminderWithDueLabel(
+  reminder: ReminderItem,
+  timeZone: string,
+  date: string,
+): ReminderItem {
+  if (!reminder.dueAt) return { ...reminder, dueLabel: "No due date" };
+  const due = new Date(reminder.dueAt);
+  const dueDate = dateInTimeZone(due, timeZone);
+  const dueLabel =
+    dueDate === date
+      ? `Due ${new Intl.DateTimeFormat("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          timeZone,
+        }).format(due)}`
+      : `Due ${new Intl.DateTimeFormat("en-US", {
+          month: "short",
+          day: "numeric",
+          timeZone,
+        }).format(due)}`;
+  return { ...reminder, dueLabel };
+}
+
 export async function getBriefingPayload(
   options: BriefingRequest = {},
 ): Promise<BriefingPayload> {
@@ -205,6 +231,8 @@ export async function getBriefingPayload(
   const [
     icalResult,
     homeCalendarResult,
+    reminderStatus,
+    photoResult,
     sportsResult,
     headlineResult,
     quoteResult,
@@ -213,6 +241,9 @@ export async function getBriefingPayload(
   ] = await Promise.all([
     fetchIcalCalendar({ feed: "work", from, to, timeZone }),
     fetchIcalCalendar({ feed: "home", from, to, timeZone }),
+    getReminders(),
+    // Only today has a photo; it is the one image the build publishes.
+    date === today ? fetchPhotoOfDay(today) : Promise.resolve(undefined),
     fetchLiveSports(timeZone),
     fetchRssHeadlines(),
     fetchQuoteOfTheDay(),
@@ -287,6 +318,28 @@ export async function getBriefingPayload(
     message: homeCalendarResult.ok
       ? homeCalendarResult.warnings[0]
       : homeCalendarResult.error,
+  };
+
+  const reminderSource: BriefingSourceStatus = {
+    provider: "apple-shortcut",
+    capability: "reminders",
+    label: "Apple Reminders Shortcut",
+    state: reminderStatus.state === "connected" ? "live" : reminderStatus.state,
+    lastSyncedAt: reminderStatus.panel?.syncedAt,
+    message: reminderStatus.message,
+  };
+  const reminderConnection: ConnectionSummary = {
+    provider: "apple-shortcut",
+    state: reminderStatus.state,
+    accountLabel: reminderStatus.panel ? "iPhone Shortcut" : undefined,
+    lastSyncedAt: reminderStatus.panel?.syncedAt,
+    message: reminderStatus.message,
+  };
+  const reminders = reminderStatus.panel && {
+    ...reminderStatus.panel,
+    items: reminderStatus.panel.items.map((reminder) =>
+      reminderWithDueLabel(reminder, timeZone, date),
+    ),
   };
 
   const { weather, hourlyWeather } = weatherResult.ok
@@ -392,6 +445,7 @@ export async function getBriefingPayload(
   const sources: BriefingSourceStatus[] = [
     icalSource,
     homeCalendarSource,
+    reminderSource,
     weatherSource,
     sportsSource,
     headlineSource,
@@ -410,6 +464,8 @@ export async function getBriefingPayload(
       hotGames,
       // Local data, so it needs no fetch and never appears in `sources`.
       birthdays: birthdaysInWindow(date),
+      reminders,
+      photo: photoResult?.photo,
       upcomingReleases,
       agenda: recentAgenda,
       weather,
@@ -421,6 +477,7 @@ export async function getBriefingPayload(
     connections: [
       icalConnection,
       homeCalendarConnection,
+      reminderConnection,
       weatherConnection,
       sportsConnection,
       headlineConnection,

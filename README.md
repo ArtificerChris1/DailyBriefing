@@ -1,6 +1,6 @@
 # Brief
 
-A private, mobile-first daily briefing that combines work and home calendars, hourly weather, sports, and headlines in one focused view. It is a static site: a scheduled GitHub Actions job rebuilds it each morning and publishes it to GitHub Pages, so there is no server to run or pay for. 
+A private, mobile-first daily briefing that combines work and home calendars, Apple Reminders, a photo of the day, hourly weather, sports, and headlines in one focused view. It is a static site: a scheduled GitHub Actions job rebuilds it each morning and publishes it to GitHub Pages, so there is no server to run or pay for. 
 
 ## What is live now
 
@@ -23,7 +23,7 @@ npm.cmd run dev
 
 Open `http://localhost:3000`. After any `.env.local` change, stop the development server with `Ctrl+C` and start it again.
 
-Weather works without an API key. See [Apple setup](docs/apple-setup.md) to connect the home calendar.
+Weather works without an API key. See [Apple setup](docs/apple-setup.md) to connect the home calendar, Reminders, and the photo of the day.
 
 ## Connect the work calendar with iCal
 
@@ -69,7 +69,7 @@ Every provider runs during that build, so the briefing is a snapshot: scores, ca
 One-time setup:
 
 1. In the repository, open **Settings > Pages** and set **Source** to **GitHub Actions**.
-2. Under **Settings > Environments > github-pages**, add each credential you use as an environment **secret**: `WORK_CALENDAR_ICAL_URL`, `HOME_CALENDAR_ICAL_URL`, `API_NINJAS_KEY`, `BGG_API_TOKEN`, `TMDB_ACCESS_TOKEN` or `TMDB_API_KEY`, `COMICVINE_API_KEY`, `THESPORTSDB_API_KEY`.
+2. Under **Settings > Environments > github-pages**, add each credential you use as an environment **secret**: `WORK_CALENDAR_ICAL_URL`, `HOME_CALENDAR_ICAL_URL`, `API_NINJAS_KEY`, `BGG_API_TOKEN`, `TMDB_ACCESS_TOKEN` or `TMDB_API_KEY`, `COMICVINE_API_KEY`, `THESPORTSDB_API_KEY`, `REMINDERS_KEY`, `ICLOUD_SHARED_ALBUM_URL`. See [Apple setup](docs/apple-setup.md) for the last two and for the Reminders Shortcut.
 3. Optionally add repository **variables** for `OPEN_METEO_LATITUDE`, `OPEN_METEO_LONGITUDE`, `OPEN_METEO_LOCATION`, `OPEN_METEO_TIMEZONE`, `OPEN_METEO_TEMPERATURE_UNIT`, `TMDB_REGION`, and `COMICVINE_PUBLISHERS`.
 4. Run the workflow once from the **Actions** tab.
 
