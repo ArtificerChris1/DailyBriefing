@@ -1,10 +1,10 @@
 # Builds the briefing as a static site and publishes it to GitHub Pages.
 #
 # Every provider runs here, during `next build`, so the published site holds
-# no credentials: private calendar URLs and API keys live in repository
-# secrets and only ever reach this job. What they produce (event titles,
-# scores, headlines) is baked into the pages and is visible to anyone with
-# the site's URL.
+# no credentials: private calendar URLs and API keys live in secrets on the
+# github-pages environment and only ever reach the build job. What they
+# produce (event titles, scores, headlines) is baked into the pages and is
+# visible to anyone with the site's URL.
 name: Build and deploy briefing
 
 on:
@@ -29,16 +29,19 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # The credentials are stored as github-pages environment secrets, which a
+    # job only receives when it names that environment.
+    environment: github-pages
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
 
       - id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - run: npm ci
 
@@ -65,7 +68,7 @@ jobs:
           TMDB_REGION: ${{ vars.TMDB_REGION }}
           COMICVINE_PUBLISHERS: ${{ vars.COMICVINE_PUBLISHERS }}
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: out
 
@@ -77,4 +80,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

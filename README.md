@@ -69,7 +69,7 @@ Every provider runs during that build, so the briefing is a snapshot: scores, ca
 One-time setup:
 
 1. In the repository, open **Settings > Pages** and set **Source** to **GitHub Actions**.
-2. Under **Settings > Secrets and variables > Actions**, add each credential you use as a repository **secret**: `WORK_CALENDAR_ICAL_URL`, `HOME_CALENDAR_ICAL_URL`, `API_NINJAS_KEY`, `BGG_API_TOKEN`, `TMDB_ACCESS_TOKEN` or `TMDB_API_KEY`, `COMICVINE_API_KEY`, `THESPORTSDB_API_KEY`.
+2. Under **Settings > Environments > github-pages**, add each credential you use as an environment **secret**: `WORK_CALENDAR_ICAL_URL`, `HOME_CALENDAR_ICAL_URL`, `API_NINJAS_KEY`, `BGG_API_TOKEN`, `TMDB_ACCESS_TOKEN` or `TMDB_API_KEY`, `COMICVINE_API_KEY`, `THESPORTSDB_API_KEY`.
 3. Optionally add repository **variables** for `OPEN_METEO_LATITUDE`, `OPEN_METEO_LONGITUDE`, `OPEN_METEO_LOCATION`, `OPEN_METEO_TIMEZONE`, `OPEN_METEO_TEMPERATURE_UNIT`, `TMDB_REGION`, and `COMICVINE_PUBLISHERS`.
 4. Run the workflow once from the **Actions** tab.
 
