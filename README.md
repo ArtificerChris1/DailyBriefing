@@ -1,6 +1,6 @@
 # Brief
 
-A private, mobile-first daily briefing that combines work and home calendars, hourly weather, sports, and headlines in one focused view. It is a static site: a scheduled GitHub Actions job rebuilds it each morning and publishes it to GitHub Pages, so there is no server to run or pay for.
+A private, mobile-first daily briefing that combines work and home calendars, hourly weather, sports, and headlines in one focused view. It is a static site: a scheduled GitHub Actions job rebuilds it each morning and publishes it to GitHub Pages, so there is no server to run or pay for. 
 
 ## What is live now
 
