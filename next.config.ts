@@ -31,16 +31,21 @@ const nextConfig: NextConfig = {
         hostname: "image.tmdb.org",
         pathname: "/t/p/**",
       },
-      // Metron issue covers. Their deployment serves media from a DigitalOcean
-      // Spaces custom domain, so the subdomain is matched rather than named;
-      // kept in step with coverUrl() in lib/providers/releases/metron-comics.ts.
+      // Comic Vine issue covers. Their CDN has moved between GameSpot and
+      // CBS Interactive hosts over the years and the API returns whichever is
+      // current, so both are allowed; kept in step with coverUrl() in
+      // lib/providers/releases/comic-vine.ts.
       {
         protocol: "https",
-        hostname: "metron.cloud",
+        hostname: "comicvine.gamespot.com",
       },
       {
         protocol: "https",
-        hostname: "**.metron.cloud",
+        hostname: "**.gamespot.com",
+      },
+      {
+        protocol: "https",
+        hostname: "**.cbsistatic.com",
       },
     ],
   },
