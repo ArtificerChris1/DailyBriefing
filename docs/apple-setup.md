@@ -19,7 +19,7 @@ Apple calls this a public calendar because anyone who has its unguessable link c
 
 ## Apple Reminders
 
-The site has no server, so an iPhone Shortcut sends your open reminders to GitHub instead. GitHub runs the deploy workflow, which encrypts them, saves them on the `reminders-data` branch, and rebuilds the site; the daily build reuses that saved snapshot until the Shortcut runs again. The repository is public, so the branch holds only ciphertext, but **the reminder titles appear on the published site**.
+The site has no server, so an iPhone Shortcut sends your open reminders to GitHub instead. GitHub runs the deploy workflow, which encrypts them, saves them on the `reminders-data` branch, and rebuilds the site; the daily build reuses that saved snapshot until the Shortcut runs again. The repository is public, so the branch holds only ciphertext; on the site, reminders are encrypted along with everything else and only appear after login.
 
 ### 1. Create the encryption key
 
@@ -65,7 +65,7 @@ Ticking a reminder off on the site only hides it on that device until the next s
 
 The build picks one photo a day from an iCloud Shared Album and publishes a copy of it.
 
-1. In **Photos** on iPhone, create a Shared Album (or use an existing one) and add the photos you are happy to show on the public site.
+1. In **Photos** on iPhone, create a Shared Album (or use an existing one) and add the photos you want to see. The build encrypts the day's photo before publishing it.
 2. Open the album, tap the **People** icon, and turn on **Public Website**. Tap **Share Link** and copy it; it looks like `https://www.icloud.com/sharedalbum/#B0aGWZuqDGKrA9R`.
 3. Add the link as an `ICLOUD_SHARED_ALBUM_URL` secret under **Settings > Environments > github-pages**, and to `.env.local` to try it locally.
 

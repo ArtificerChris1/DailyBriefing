@@ -76,9 +76,6 @@ type Panel = "connections" | "preferences" | null;
  */
 const SHOW_CONNECTIONS_ENTRY = false;
 
-/** The site may be served from a subpath, e.g. a GitHub Pages project URL. */
-const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-
 interface Preferences {
   briefingTime: string;
   timeZone: string;
@@ -296,7 +293,20 @@ function SectionHeading({
   );
 }
 
-export function DashboardShell({ initialPayload }: { initialPayload: BriefingPayload }) {
+export function DashboardShell({
+  initialPayload,
+  loadDay,
+  photoUrl,
+  accountSettings,
+}: {
+  initialPayload: BriefingPayload;
+  /** Fetches and decrypts one day's briefing; see components/briefing-gate.tsx. */
+  loadDay: (date: string) => Promise<BriefingPayload>;
+  /** Decrypted photo of the day, as an object URL. */
+  photoUrl?: string;
+  /** Lock and passkey controls, shown at the top of Preferences. */
+  accountSettings?: React.ReactNode;
+}) {
   const [payload, setPayload] = useState(initialPayload);
   const [panel, setPanel] = useState<Panel>(null);
   const [preferences, setPreferences] =
@@ -458,15 +468,10 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
 
   /**
    * Single request path, so refreshing and paging always agree on location.
-   * Each day is a static file written by the last scheduled build.
+   * Each day is an encrypted static file written by the last scheduled build.
    */
   async function loadBriefing(date: string): Promise<BriefingPayload> {
-    const response = await fetch(`${BASE_PATH}/briefing/${date}.json`, {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-    if (!response.ok) throw new Error("Briefing request failed");
-    const loaded = (await response.json()) as BriefingPayload;
+    const loaded = await loadDay(date);
     return localWeatherRef.current
       ? withLocalWeather(loaded, localWeatherRef.current)
       : loaded;
@@ -853,7 +858,7 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
               </section>
             )}
 
-            {preferences.showPhoto && briefing.photo && (
+            {preferences.showPhoto && briefing.photo && photoUrl && (
               <section className="card photo-card" aria-labelledby="photo-title">
                 <SectionHeading
                   title="Photo of the day"
@@ -865,9 +870,7 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
                 />
                 <figure className="photo-figure">
                   <Image
-                    // The file is replaced each morning under the same name, so
-                    // the date keeps a cached copy of yesterday's from showing.
-                    src={`${BASE_PATH}${briefing.photo.src}?d=${briefing.today}`}
+                    src={photoUrl}
                     alt={briefing.photo.caption ?? "Photo of the day"}
                     width={briefing.photo.width}
                     height={briefing.photo.height}
@@ -1240,6 +1243,7 @@ export function DashboardShell({ initialPayload }: { initialPayload: BriefingPay
                 preferences={preferences}
                 updatePreference={updatePreference}
                 onReset={resetDemo}
+                accountSettings={accountSettings}
               />
             )}
           </aside>
@@ -1404,13 +1408,16 @@ function PreferencesPanel({
   preferences,
   updatePreference,
   onReset,
+  accountSettings,
 }: {
   preferences: Preferences;
   updatePreference: <K extends keyof Preferences>(key: K, value: Preferences[K]) => void;
   onReset: () => void;
+  accountSettings?: React.ReactNode;
 }) {
   return (
     <div className="panel-body preferences-body">
+      {accountSettings}
       <section className="settings-section">
         <h3>Delivery</h3>
         <label className="field-label">

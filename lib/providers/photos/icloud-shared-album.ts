@@ -20,8 +20,8 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_WIDTH = 2048;
 const BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-/** Where the image is published; the route at this path serves the bytes. */
-export const PHOTO_PATH = "/photo-of-the-day.jpg";
+/** Where the encrypted image is published; the route at this path writes it. */
+export const PHOTO_PATH = "/photo-of-the-day.bin";
 
 interface Derivative {
   checksum: string;

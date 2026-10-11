@@ -497,7 +497,7 @@ export const connectors: ConnectorDefinition[] = [
     zone: "personal",
     capabilities: ["Selected reminder lists"],
     permissionNote:
-      "Saved encrypted in the repository; the reminder text itself appears on the site.",
+      "Saved encrypted in the repository and shown only after login.",
   },
   {
     id: "weather",

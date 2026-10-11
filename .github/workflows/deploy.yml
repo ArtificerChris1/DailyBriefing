@@ -3,8 +3,9 @@
 # Every provider runs here, during `next build`, so the published site holds
 # no credentials: private calendar URLs and API keys live in secrets on the
 # github-pages environment and only ever reach the build job. What they
-# produce (event titles, scores, headlines) is baked into the pages and is
-# visible to anyone with the site's URL.
+# produce is encrypted with BRIEFING_DATA_KEY before it is published, and the
+# browser decrypts it after login with BRIEFING_PASSWORD or a passkey; see
+# docs/login-setup.md. The build fails rather than publish without the key.
 name: Build and deploy briefing
 
 on:
@@ -77,6 +78,10 @@ jobs:
         env:
           # The project site is served from /<repo>, which configure-pages reports.
           NEXT_PUBLIC_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          # For the "edit data/passkeys.json" link shown after adding a passkey.
+          NEXT_PUBLIC_GITHUB_REPOSITORY: ${{ github.repository }}
+          BRIEFING_DATA_KEY: ${{ secrets.BRIEFING_DATA_KEY }}
+          BRIEFING_PASSWORD: ${{ secrets.BRIEFING_PASSWORD }}
           WORK_CALENDAR_ICAL_URL: ${{ secrets.WORK_CALENDAR_ICAL_URL }}
           HOME_CALENDAR_ICAL_URL: ${{ secrets.HOME_CALENDAR_ICAL_URL }}
           API_NINJAS_KEY: ${{ secrets.API_NINJAS_KEY }}

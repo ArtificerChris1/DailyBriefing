@@ -69,11 +69,11 @@ Every provider runs during that build, so the briefing is a snapshot: scores, ca
 One-time setup:
 
 1. In the repository, open **Settings > Pages** and set **Source** to **GitHub Actions**.
-2. Under **Settings > Environments > github-pages**, add each credential you use as an environment **secret**: `WORK_CALENDAR_ICAL_URL`, `HOME_CALENDAR_ICAL_URL`, `API_NINJAS_KEY`, `BGG_API_TOKEN`, `TMDB_ACCESS_TOKEN` or `TMDB_API_KEY`, `COMICVINE_API_KEY`, `THESPORTSDB_API_KEY`, `REMINDERS_KEY`, `ICLOUD_SHARED_ALBUM_URL`. See [Apple setup](docs/apple-setup.md) for the last two and for the Reminders Shortcut.
+2. Under **Settings > Environments > github-pages**, add each credential you use as an environment **secret**: `WORK_CALENDAR_ICAL_URL`, `HOME_CALENDAR_ICAL_URL`, `API_NINJAS_KEY`, `BGG_API_TOKEN`, `TMDB_ACCESS_TOKEN` or `TMDB_API_KEY`, `COMICVINE_API_KEY`, `THESPORTSDB_API_KEY`, `REMINDERS_KEY`, `ICLOUD_SHARED_ALBUM_URL`, and the two login secrets `BRIEFING_DATA_KEY` and `BRIEFING_PASSWORD`. See [Apple setup](docs/apple-setup.md) for the last two and for the Reminders Shortcut.
 3. Optionally add repository **variables** for `OPEN_METEO_LATITUDE`, `OPEN_METEO_LONGITUDE`, `OPEN_METEO_LOCATION`, `OPEN_METEO_TIMEZONE`, `OPEN_METEO_TEMPERATURE_UNIT`, `TMDB_REGION`, and `COMICVINE_PUBLISHERS`.
 4. Run the workflow once from the **Actions** tab.
 
-GitHub Pages sites are public. Credentials stay in secrets and never reach the site, but what they produce—calendar event titles, birthdays, and everything else on the page—is readable by anyone with the URL. On GitHub's free plan, Pages also requires the repository itself to be public.
+GitHub Pages sites are public, so the build encrypts everything personal and the site asks for a password or passkey before decrypting it in the browser. See [Login setup](docs/login-setup.md). The repository and its history stay public; on GitHub's free plan, Pages requires that.
 
 GitHub disables scheduled workflows after 60 days without repository activity; re-enable it from the **Actions** tab if the briefing stops updating.
 

@@ -2966,3 +2966,109 @@ a:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Login screen, shown until the password or a passkey unlocks the data. */
+.lock-screen {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.lock-card {
+  display: grid;
+  width: min(100%, 360px);
+  gap: 14px;
+  padding: 28px 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.lock-card h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 750;
+}
+
+.lock-note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.lock-error {
+  margin: 0;
+  color: var(--now);
+  font-size: 13px;
+}
+
+.lock-form {
+  display: grid;
+  gap: 10px;
+}
+
+.lock-primary,
+.lock-secondary {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.lock-primary {
+  border: 0;
+  background: var(--green);
+  color: #fff;
+}
+
+.lock-secondary {
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+}
+
+.lock-primary:disabled,
+.lock-secondary:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.secondary-action {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.secondary-action:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.passkey-entry textarea {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  resize: vertical;
+}
