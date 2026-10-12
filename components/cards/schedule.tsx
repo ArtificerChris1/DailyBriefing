@@ -36,15 +36,40 @@ function localHour(instant: number, timeZone: string): number {
   return value("hour") + value("minute") / 60;
 }
 
-/** Greedy lane assignment: each event takes the first lane that is free. */
-function assignLanes(events: CalendarItem[]): { item: CalendarItem; lane: number }[] {
+/**
+ * Narrowest a block is drawn, as a share of the timeline, so a 15-minute
+ * meeting still shows its time and the start of its title.
+ */
+const MIN_BLOCK_PERCENT = 9;
+
+interface Placed {
+  item: CalendarItem;
+  left: number;
+  width: number;
+  lane: number;
+}
+
+/**
+ * Greedy lane assignment on the blocks as drawn, not as scheduled: a short
+ * meeting widened to MIN_BLOCK_PERCENT can cover the next one, so it moves
+ * to another lane instead of hiding it.
+ */
+function placeBlocks(
+  events: CalendarItem[],
+  position: (instant: number) => number,
+): Placed[] {
   const laneEnds: number[] = [];
   return events.map((item) => {
-    const start = eventStartMs(item);
-    let lane = laneEnds.findIndex((end) => end <= start);
+    const start = position(eventStartMs(item));
+    // An event ending at midnight reads as 0:00; run it to the edge.
+    const rawEnd = position(eventEndMs(item));
+    const end = rawEnd <= start ? 100 : rawEnd;
+    const width = Math.max(end - start, MIN_BLOCK_PERCENT);
+    const left = Math.min(start, 100 - width);
+    let lane = laneEnds.findIndex((laneEnd) => laneEnd <= left + 0.01);
     if (lane === -1) lane = laneEnds.length;
-    laneEnds[lane] = Math.max(eventEndMs(item), start + 15 * 60 * 1000);
-    return { item, lane };
+    laneEnds[lane] = left + width;
+    return { item, left, width, lane };
   });
 }
 
@@ -132,11 +157,16 @@ export function ScheduleCard({
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const selected = timed.find((item) => item.id === selectedId) ?? nextUp;
 
-  // Window: 8 AM–6 PM at least, widened to fit every event.
-  const startHour = Math.min(8, ...timed.map((item) => Math.floor(localHour(eventStartMs(item), timeZone))));
+  // Holds ("Check with me before scheduling") are shaded behind the day
+  // rather than drawn as events, and do not stretch the hours shown.
+  const plans = timed.filter((item) => !item.hold);
+  const holds = timed.filter((item) => item.hold);
+  const sized = plans.length ? plans : timed;
+  // Window: 8 AM–6 PM at least, widened to fit every planned event.
+  const startHour = Math.min(8, ...sized.map((item) => Math.floor(localHour(eventStartMs(item), timeZone))));
   const endHour = Math.max(
     18,
-    ...timed.map((item) => {
+    ...sized.map((item) => {
       const end = localHour(eventEndMs(item), timeZone);
       // An event ending at midnight reads as hour 0.
       return end === 0 ? 24 : Math.ceil(end);
@@ -145,7 +175,7 @@ export function ScheduleCard({
   const span = Math.max(1, endHour - startHour);
   const position = (instant: number) =>
     Math.min(100, Math.max(0, ((localHour(instant, timeZone) - startHour) / span) * 100));
-  const laid = assignLanes(timed);
+  const laid = placeBlocks(plans, position);
   const lanes = Math.max(1, ...laid.map(({ lane }) => lane + 1));
   const showNow = isToday && localHour(nowMs, timeZone) >= startHour && localHour(nowMs, timeZone) <= endHour;
   const hours = Array.from({ length: Math.floor(span / 2) + 1 }, (_, index) => startHour + index * 2);
@@ -188,12 +218,23 @@ export function ScheduleCard({
                     </span>
                   ))}
                 </div>
+                {holds.map((item) => {
+                  const start = position(eventStartMs(item));
+                  const rawEnd = position(eventEndMs(item));
+                  const end = rawEnd <= start ? 100 : rawEnd;
+                  return end > start ? (
+                    <div
+                      key={item.id}
+                      className="timeline-hold"
+                      style={{ left: `${start}%`, width: `${end - start}%` }}
+                      aria-hidden="true"
+                    >
+                      <span>Hold</span>
+                    </div>
+                  ) : null;
+                })}
                 <ul className="timeline-track" aria-label="Timed events; choose one to see its details">
-                  {laid.map(({ item, lane }) => {
-                    const start = position(eventStartMs(item));
-                    // An event ending at midnight reads as 0:00; run it to the edge.
-                    const rawEnd = position(eventEndMs(item));
-                    const end = rawEnd <= start ? 100 : rawEnd;
+                  {laid.map(({ item, left, width, lane }) => {
                     const isPast = isToday && eventEndMs(item) < nowMs;
                     const forecast = eventForecast(item, hourly);
                     const isSelected = selected?.id === item.id;
@@ -201,8 +242,8 @@ export function ScheduleCard({
                       <li
                         key={item.id}
                         style={{
-                          left: `${start}%`,
-                          width: `${Math.max(end - start, 2)}%`,
+                          left: `${left}%`,
+                          width: `${width}%`,
                           top: `calc(${lane} * var(--lane-height))`,
                         }}
                       >
@@ -233,6 +274,12 @@ export function ScheduleCard({
                   </div>
                 )}
               </div>
+              {holds.length > 0 && (
+                <p className="timeline-holds">
+                  <Badge>Hold</Badge>{" "}
+                  {holds.map((item) => `${timeRange(item, timeZone)}: ${item.title}`).join("; ")}
+                </p>
+              )}
               {selected && (
                 <div className="timeline-details" aria-live="polite">
                   <EventDetails

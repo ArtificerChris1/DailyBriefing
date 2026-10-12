@@ -22,6 +22,40 @@ const MAX_PER_MEDIUM = 8;
  * most recent Wednesday from any day the pager lands on.
  */
 const COMICS_LOOKBACK_DAYS = 7;
+/** How far back the pager can go; see MIN_DAY_OFFSET in lib/briefing-window.ts. */
+const PAGER_LOOKBACK_DAYS = 7;
+/**
+ * The build-wide comics fetch covers every page's window at once, so it reads
+ * further and keeps more than one page would need.
+ */
+const SHARED_COMIC_LIMITS = { maxPages: 6, maxMatches: 40 };
+
+let sharedComics: { key: string; result: ReturnType<typeof fetchComicReleases> } | undefined;
+
+/** Today in the briefing's time zone: the real day the build runs on. */
+function buildToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: process.env.OPEN_METEO_TIMEZONE?.trim() || "America/Chicago",
+  }).format(Date.now());
+}
+
+/**
+ * Comics for every page of the pager from one Comic Vine read. Each page used
+ * to fetch its own window, about 21 times per build, which ran into Comic
+ * Vine's 200-requests-an-hour limit; now each page filters this shared list.
+ */
+function comicsForBuild() {
+  const today = buildToday();
+  const from = addDays(today, -(PAGER_LOOKBACK_DAYS + COMICS_LOOKBACK_DAYS));
+  const key = `${from}|${today}`;
+  if (sharedComics?.key !== key) {
+    sharedComics = { key, result: fetchComicReleases(from, today, SHARED_COMIC_LIMITS) };
+  }
+  return sharedComics.result;
+}
 /**
  * Only a few, and only the newest. The card shows eight rows before the reader
  * has to expand it, and past rows earning most of them would bury the upcoming
@@ -115,7 +149,7 @@ export async function fetchUpcomingReleases(
   const [screen, books, comics] = await Promise.all([
     fetchScreenReleases(today, to),
     fetchBookReleases(today, to),
-    fetchComicReleases(shippedFrom, today),
+    comicsForBuild(),
   ]);
 
   const warnings = [...screen.warnings, ...books.warnings, ...comics.warnings];

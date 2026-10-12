@@ -259,7 +259,11 @@ function toReleaseItem(
 export async function fetchComicReleases(
   from: string,
   to: string,
+  /** Raised for the build-wide fetch, which serves every page of the pager. */
+  limits: { maxPages?: number; maxMatches?: number } = {},
 ): Promise<ComicReleases> {
+  const maxPages = limits.maxPages ?? MAX_ISSUE_PAGES;
+  const maxMatches = limits.maxMatches ?? MAX_MATCHES;
   const key = process.env.COMICVINE_API_KEY?.trim();
   if (!key) return { items: [], warnings: [], configured: false };
 
@@ -279,7 +283,7 @@ export async function fetchComicReleases(
   const items: ReleaseItem[] = [];
 
   try {
-    for (let page = 0; page < MAX_ISSUE_PAGES; page += 1) {
+    for (let page = 0; page < maxPages; page += 1) {
       const issues = await request(
         "issues",
         {
@@ -315,10 +319,15 @@ export async function fetchComicReleases(
         if (item) items.push(item);
       }
 
-      if (items.length >= MAX_MATCHES) break;
+      if (items.length >= maxMatches) break;
       if (issues.length < PAGE_SIZE) break;
     }
   } catch (error) {
+    // A later page failing after earlier ones succeeded still leaves plenty
+    // to show; only an empty result is worth a warning.
+    if (items.length > 0 && !(error instanceof ComicVineError && error.statusCode === STATUS_INVALID_KEY)) {
+      return { items: items.slice(0, maxMatches), warnings, configured: true };
+    }
     if (error instanceof ComicVineError) {
       if (error.statusCode === STATUS_INVALID_KEY) {
         authRejectedUntil = Date.now() + AUTH_COOLDOWN_MS;
@@ -349,7 +358,7 @@ export async function fetchComicReleases(
     }
   }
 
-  return { items: items.slice(0, MAX_MATCHES), warnings, configured: true };
+  return { items: items.slice(0, maxMatches), warnings, configured: true };
 }
 
 export const COMIC_VINE_ATTRIBUTION = ATTRIBUTION;

@@ -69,6 +69,7 @@ export function GlanceHero({
   brief,
   briefNote,
   reminders,
+  completed,
   occasions,
   timeZone,
   nowMs,
@@ -80,8 +81,14 @@ export function GlanceHero({
   brief?: DailyBrief;
   /** Shown when the summary was written for the other view. */
   briefNote?: string;
-  /** Open reminders: not ticked off or snoozed on this device. */
+  /**
+   * Reminders from the last Shortcut snapshot, without ones snoozed here.
+   * Ticked-off ones are included and counted as done, so the tile agrees
+   * with the summary, which only knows the snapshot.
+   */
   reminders: ReminderItem[];
+  /** Ids ticked off on this device. */
+  completed: string[];
   occasions: OccasionItem[];
   timeZone: string;
   nowMs: number;
@@ -100,7 +107,9 @@ export function GlanceHero({
         .filter((item) => item.dueAt && dateKey(item.dueAt, timeZone) <= targetDate)
         .sort((a, b) => Date.parse(a.dueAt!) - Date.parse(b.dueAt!))
     : [];
-  const overdue = day ? due.filter((item) => dateKey(item.dueAt!, timeZone) < day.today) : [];
+  const openDue = due.filter((item) => !completed.includes(item.id));
+  const doneHere = due.length - openDue.length;
+  const overdue = day ? openDue.filter((item) => dateKey(item.dueAt!, timeZone) < day.today) : [];
 
   const weather = day?.weather;
   const wettest = day?.hourlyWeather.reduce<number>(
@@ -199,12 +208,17 @@ export function GlanceHero({
                   {due.length ? plural(due.length, "reminder") + " due" : "No reminders due"}
                 </p>
                 <p className="insight-text">
-                  {due.length
-                    ? `${due[0].title}, ${dueLabel(due[0], day.today, timeZone).toLowerCase()}`
-                    : mode === "today"
-                      ? "Nothing due today."
-                      : "Nothing due by tomorrow."}
+                  {openDue.length
+                    ? `${openDue[0].title}, ${dueLabel(openDue[0], day.today, timeZone).toLowerCase()}`
+                    : due.length
+                      ? `${due.length === 1 ? "Done" : "All done"} on this device.`
+                      : mode === "today"
+                        ? "Nothing due today."
+                        : "Nothing due by tomorrow."}
                 </p>
+                {openDue.length > 0 && doneHere > 0 && (
+                  <p className="insight-text">{doneHere} done on this device.</p>
+                )}
                 {overdue.length > 0 && (
                   <p className="insight-text">{plural(overdue.length, "is", "are")} overdue.</p>
                 )}

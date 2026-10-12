@@ -1743,6 +1743,37 @@ input[aria-invalid="true"] {
   background: var(--surface-3);
 }
 
+/* Placeholder holds: shading behind the lanes, listed in text below. */
+.timeline-hold {
+  position: absolute;
+  top: 1.75rem;
+  bottom: 0.25rem;
+  border-inline: 1px dashed var(--border-control);
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0,
+    transparent 6px,
+    var(--neutral-soft) 6px,
+    var(--neutral-soft) 12px
+  );
+  pointer-events: none;
+}
+
+.timeline-hold span {
+  position: absolute;
+  bottom: var(--space-1);
+  left: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.timeline-holds {
+  grid-column: 1;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
 .timeline-time {
   font-size: var(--text-xs);
   font-weight: 750;
@@ -1785,6 +1816,8 @@ input[aria-invalid="true"] {
 }
 
 .timeline-details {
+  grid-column: 2;
+  grid-row: 1 / span 2;
   display: grid;
   align-content: start;
   gap: var(--space-1);
@@ -2268,6 +2301,103 @@ input[aria-invalid="true"] {
 @container (min-width: 44rem) {
   .news-lanes {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Sources: how each feed fared in the build */
+.sources {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.sources-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.sources-header h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-md);
+}
+
+.sources-built {
+  flex: 1;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.sources-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.sources-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  font-size: var(--text-sm);
+}
+
+.source-name {
+  font-weight: 650;
+}
+
+.source-status {
+  color: var(--text-muted);
+}
+
+.source-ok svg {
+  color: var(--accent);
+}
+
+.source-partial {
+  border-color: var(--warning) !important;
+}
+
+.source-partial svg {
+  color: var(--warning);
+}
+
+.source-failed {
+  border-color: var(--danger) !important;
+}
+
+.source-failed svg {
+  color: var(--danger);
+}
+
+.source-off svg {
+  color: var(--text-muted);
+}
+
+.sources-details {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  max-width: 80ch;
+}
+
+.sources-details strong {
+  color: var(--text);
+}
+
+@media (min-width: 64em) {
+  .sources {
+    padding: var(--space-4) var(--space-5);
   }
 }
 

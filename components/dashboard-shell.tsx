@@ -21,6 +21,7 @@ import { PhotoCard } from "@/components/cards/photo";
 import { ReleasesCard } from "@/components/cards/releases";
 import { RemindersCard } from "@/components/cards/reminders";
 import { ScheduleCard } from "@/components/cards/schedule";
+import { SourcesStatus } from "@/components/cards/sources";
 import { SportsCard } from "@/components/cards/sports";
 import { UpNextCard } from "@/components/cards/up-next";
 import { WeatherCard } from "@/components/cards/weather";
@@ -500,7 +501,8 @@ export function DashboardShell({
               }
               brief={heroBrief}
               briefNote={heroNote}
-              reminders={openReminders}
+              reminders={shownReminders}
+              completed={completedReminders}
               occasions={briefing.occasions ?? []}
               timeZone={timeZone}
               nowMs={nowMs}
@@ -603,6 +605,8 @@ export function DashboardShell({
           </div>
 
           {preferences.showNews && briefing.headlines.length > 0 && <NewsCard headlines={briefing.headlines} />}
+
+          <SourcesStatus briefing={briefing} isToday={isToday} timeZone={timeZone} />
         </div>
       </main>
 
