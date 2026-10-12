@@ -71,8 +71,9 @@ One-time setup:
 1. In the repository, open **Settings > Pages** and set **Source** to **GitHub Actions**.
 2. Under **Settings > Environments > github-pages**, add each credential you use as an environment **secret**: `WORK_CALENDAR_ICAL_URL`, `HOME_CALENDAR_ICAL_URL`, `API_NINJAS_KEY`, `BGG_API_TOKEN`, `TMDB_ACCESS_TOKEN` or `TMDB_API_KEY`, `COMICVINE_API_KEY`, `THESPORTSDB_API_KEY`, `REMINDERS_KEY`, `ICLOUD_SHARED_ALBUM_URL`, and the two login secrets `BRIEFING_DATA_KEY` and `BRIEFING_PASSWORD`. See [Apple setup](docs/apple-setup.md) for the last two and for the Reminders Shortcut.
 3. For the AI summary, add an `ANTHROPIC_API_KEY` secret from [platform.claude.com](https://platform.claude.com). Optionally set a `BRIEF_MODEL` variable (default `claude-opus-5-5`) and a `HEADS_UP_IGNORE_TITLES` variable listing event-title fragments the "You might have forgotten" checks should skip.
-4. Optionally add repository **variables** for `OPEN_METEO_LATITUDE`, `OPEN_METEO_LONGITUDE`, `OPEN_METEO_LOCATION`, `OPEN_METEO_TIMEZONE`, `OPEN_METEO_TEMPERATURE_UNIT`, `TMDB_REGION`, and `COMICVINE_PUBLISHERS`.
-5. Run the workflow once from the **Actions** tab.
+4. For leave-by times, add `ORS_API_KEY` (free at [openrouteservice.org](https://openrouteservice.org)) and `HOME_ADDRESS` secrets, and optionally a `TRAVEL_BUFFER_MINUTES` variable (default 10). Events whose location is a call or link are skipped, and drive times are typical rather than live traffic.
+5. Optionally add repository **variables** for `OPEN_METEO_LATITUDE`, `OPEN_METEO_LONGITUDE`, `OPEN_METEO_LOCATION`, `OPEN_METEO_TIMEZONE`, `OPEN_METEO_TEMPERATURE_UNIT`, `TMDB_REGION`, and `COMICVINE_PUBLISHERS`.
+6. Run the workflow once from the **Actions** tab.
 
 GitHub Pages sites are public, so the build encrypts everything personal and the site asks for a password or passkey before decrypting it in the browser. See [Login setup](docs/login-setup.md). The repository and its history stay public; on GitHub's free plan, Pages requires that.
 

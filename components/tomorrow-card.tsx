@@ -9,13 +9,16 @@ function firstEvent(agenda: CalendarItem[]): CalendarItem | undefined {
     ?? agenda.find((item) => item.status !== "cancelled");
 }
 
-function startLabel(item: CalendarItem, timeZone: string): string {
-  if (item.time.mode === "all-day") return "All day";
+function clockLabel(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
     timeZone,
-  }).format(Date.parse(item.time.start));
+  }).format(Date.parse(iso));
+}
+
+function startLabel(item: CalendarItem, timeZone: string): string {
+  return item.time.mode === "all-day" ? "All day" : clockLabel(item.time.start, timeZone);
 }
 
 /**
@@ -71,6 +74,11 @@ export function TomorrowCard({
                     )}
                     {timedCount > 1 && ` · ${timedCount} events in all`}
                   </span>
+                  {event.departure && (
+                    <span className="leave-by">
+                      Leave by {clockLabel(event.departure.leaveAt, timeZone)} ({event.departure.travelMinutes} min drive)
+                    </span>
+                  )}
                 </>
               ) : (
                 <strong>Nothing scheduled</strong>
@@ -88,6 +96,12 @@ export function TomorrowCard({
                 <span>
                   {peakRain ?? weather.precipitationChance ?? 0}% chance of rain at most
                 </span>
+                {briefing.outdoorWindow && (
+                  <span>
+                    Best outside: {clockLabel(briefing.outdoorWindow.from, timeZone)}–
+                    {clockLabel(briefing.outdoorWindow.to, timeZone)}
+                  </span>
+                )}
               </div>
             </div>
           )}

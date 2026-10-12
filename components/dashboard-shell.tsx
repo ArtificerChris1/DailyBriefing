@@ -22,6 +22,7 @@ import {
   Link2,
   MapPin,
   Moon,
+  Navigation,
   Newspaper,
   Pin,
   PinOff,
@@ -144,6 +145,14 @@ function timeRange(item: CalendarItem, timeZone: string) {
   const start = timeFormat.format(new Date(item.time.start));
   const end = item.time.end ? timeFormat.format(new Date(item.time.end)) : null;
   return end ? `${start}–${end}` : start;
+}
+
+function clockLabel(iso: string, timeZone: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone,
+  }).format(Date.parse(iso));
 }
 
 function relativeDayLabel(offset: number) {
@@ -1012,6 +1021,13 @@ export function DashboardShell({
                         </>
                       )}
                     </p>
+                    {nextEvent.departure && (
+                      <p className="leave-by">
+                        <Navigation size={14} aria-hidden="true" />
+                        Leave by {clockLabel(nextEvent.departure.leaveAt, timeZone)} ·{" "}
+                        {nextEvent.departure.travelMinutes} min drive, typical traffic
+                      </p>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -1059,7 +1075,9 @@ export function DashboardShell({
               <p className="weather-note">
                 {weatherRisk
                   ? `${weatherRisk.forecast?.condition ?? "Weather"} may affect ${weatherRisk.item.title}.`
-                  : "No significant weather overlap is forecast for your schedule."}
+                  : briefing.outdoorWindow
+                    ? `Good time to be outside: ${clockLabel(briefing.outdoorWindow.from, timeZone)}–${clockLabel(briefing.outdoorWindow.to, timeZone)} (${briefing.outdoorWindow.summary}).`
+                    : "No significant weather overlap is forecast for your schedule."}
               </p>
               <details className="hourly-details weather-hourly-details">
                 <summary>View full hourly forecast <ChevronRight size={15} /></summary>
@@ -1114,7 +1132,14 @@ export function DashboardShell({
                           <SourceBadge zone={item.zone} label={item.sourceLabel} />
                         </div>
                         <h3>{item.title}</h3>
-                        <p><MapPin size={13} /> {item.locationLabel}</p>
+                        <p>
+                          <MapPin size={13} /> {item.locationLabel}
+                          {item.departure && (
+                            <span className="leave-by-chip">
+                              Leave {clockLabel(item.departure.leaveAt, timeZone)}
+                            </span>
+                          )}
+                        </p>
                       </div>
                       {forecast && (
                         <div className={`schedule-entry-weather ${forecast.precipitationChance >= 50 ? "schedule-weather-alert" : ""}`}>

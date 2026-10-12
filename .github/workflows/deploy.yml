@@ -94,6 +94,8 @@ jobs:
           REMINDERS_KEY: ${{ secrets.REMINDERS_KEY }}
           ICLOUD_SHARED_ALBUM_URL: ${{ secrets.ICLOUD_SHARED_ALBUM_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ORS_API_KEY: ${{ secrets.ORS_API_KEY }}
+          HOME_ADDRESS: ${{ secrets.HOME_ADDRESS }}
           # Non-secret settings, from repository variables. Unset ones fall
           # back to the defaults documented in .env.example.
           OPEN_METEO_LATITUDE: ${{ vars.OPEN_METEO_LATITUDE }}
@@ -105,6 +107,7 @@ jobs:
           COMICVINE_PUBLISHERS: ${{ vars.COMICVINE_PUBLISHERS }}
           HEADS_UP_IGNORE_TITLES: ${{ vars.HEADS_UP_IGNORE_TITLES }}
           BRIEF_MODEL: ${{ vars.BRIEF_MODEL }}
+          TRAVEL_BUFFER_MINUTES: ${{ vars.TRAVEL_BUFFER_MINUTES }}
 
       - uses: actions/upload-pages-artifact@v5
         with:

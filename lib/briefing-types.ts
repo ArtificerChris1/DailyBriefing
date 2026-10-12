@@ -50,6 +50,25 @@ export interface CalendarItem extends BaseItem<"calendar"> {
   status: "confirmed" | "tentative" | "cancelled";
   locationLabel?: string;
   sourceLabel: string;
+  /** When to leave home to arrive on time; see lib/server/travel.ts. */
+  departure?: Departure;
+}
+
+/** Estimated drive from home, without live traffic. */
+export interface Departure {
+  /** ISO instant: start time minus the drive and the preparation buffer. */
+  leaveAt: string;
+  travelMinutes: number;
+  distanceMiles: number;
+}
+
+/** A dry, comfortable stretch of the day with nothing scheduled. */
+export interface OutdoorWindow {
+  /** ISO instants. */
+  from: string;
+  to: string;
+  /** e.g. "Clear, 68–72°". */
+  summary: string;
 }
 
 export interface ReminderItem extends BaseItem<"reminder"> {
@@ -319,6 +338,8 @@ export interface BriefingSnapshot {
   headsUp?: HeadsUpItem[];
   /** Today's page only, and only when an Anthropic API key is configured. */
   dailyBrief?: DailyBrief;
+  /** The best (remaining, on today's page) time that day to be outside, if any. */
+  outdoorWindow?: OutdoorWindow;
   agenda: CalendarItem[];
   weather: WeatherItem;
   hourlyWeather: HourlyWeatherPoint[];

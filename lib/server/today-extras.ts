@@ -18,6 +18,8 @@ import { upcomingOccasions } from "@/lib/occasions";
 import { groupReminders } from "@/lib/priorities";
 import { fetchIcalCalendar } from "@/lib/providers/ical/calendar";
 import { dailyBrief } from "@/lib/server/daily-brief";
+import { withDepartures } from "@/lib/server/travel";
+import { weatherAlerts } from "@/lib/weather-plans";
 
 /**
  * What only today's page carries: upcoming occasions, the rule-based
@@ -41,7 +43,9 @@ function calendarDay(date: string, timeZone: string, localTimeToIso: LocalTime) 
     pending = Promise.all([
       fetchIcalCalendar({ feed: "work", from, to, timeZone }),
       fetchIcalCalendar({ feed: "home", from, to, timeZone }),
-    ]).then((results) => results.flatMap((result) => (result.ok ? result.items : [])));
+    ])
+      .then((results) => results.flatMap((result) => (result.ok ? result.items : [])))
+      .then(withDepartures);
     dayCache.set(key, pending);
   }
   return pending;
@@ -63,6 +67,12 @@ function eventFact(item: CalendarItem, timeZone: string) {
         }
       : { allDay: true }),
     ...(item.locationLabel ? { location: item.locationLabel } : {}),
+    ...(item.departure
+      ? {
+          leaveBy: clock(item.departure.leaveAt, timeZone),
+          driveMinutes: item.departure.travelMinutes,
+        }
+      : {}),
     calendar: item.source.provider === "apple-calendar" ? "home" : "work",
     ...(item.status !== "confirmed" ? { status: item.status } : {}),
   };
@@ -124,13 +134,24 @@ export async function todayExtras({
         )),
       ]
     : [];
-  const headsUp = headsUpFor({
-    days,
-    today,
-    nowMs,
-    timeZone,
-    overdueReminders: reminderGroups.overdue.length,
-  });
+  const headsUp = [
+    ...headsUpFor({
+      days,
+      today,
+      nowMs,
+      timeZone,
+      overdueReminders: reminderGroups.overdue.length,
+    }),
+    ...(liveWeather
+      ? weatherAlerts({
+          hourly: liveWeather.hourlyWeather,
+          events: [...(days[0]?.agenda ?? []), ...(days[1]?.agenda ?? [])],
+          nowMs,
+          today,
+          timeZone,
+        })
+      : []),
+  ];
 
   const mode = dayModeAt(nowMs, timeZone);
   const tomorrow = shiftDateKey(today, 1);

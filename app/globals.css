@@ -3581,3 +3581,29 @@ a:focus-visible {
   background: var(--green-soft);
   color: var(--green);
 }
+
+/* Leave-by times from lib/server/travel.ts. */
+.leave-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.tomorrow-item .leave-by {
+  display: block;
+  font-size: 11px;
+}
+
+.leave-by-chip {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 700;
+}

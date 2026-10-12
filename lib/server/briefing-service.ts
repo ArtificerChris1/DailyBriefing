@@ -15,6 +15,7 @@ import {
   WEATHER_FORECAST_DAYS,
   WEATHER_PAST_DAYS,
   clampToWindow,
+  dayOffsetBetween,
   isDateKey,
 } from "@/lib/briefing-window";
 import {
@@ -37,6 +38,8 @@ import { fetchOpenMeteoWeather } from "@/lib/providers/weather/open-meteo";
 import { recencyCutoff, withinRecencyWindow } from "@/lib/recency";
 import { getReminders } from "@/lib/server/reminders";
 import { todayExtras } from "@/lib/server/today-extras";
+import { withDepartures } from "@/lib/server/travel";
+import { outdoorWindow } from "@/lib/weather-plans";
 
 function nextDate(date: string): string {
   const [year, month, day] = date.split("-").map(Number);
@@ -257,9 +260,15 @@ export async function getBriefingPayload(
     ...(icalResult.ok ? icalResult.items : []),
     ...(homeCalendarResult.ok ? homeCalendarResult.items : []),
   ];
-  const agenda = liveCalendarItems.length || icalResult.ok || homeCalendarResult.ok
-    ? liveCalendarItems.sort(
-        (left, right) => calendarStart(left) - calendarStart(right),
+  const calendarLive = icalResult.ok || homeCalendarResult.ok;
+  const offsetFromToday = dayOffsetBetween(today, date);
+  const agenda = calendarLive
+    ? // Leave-by times only where they can still be useful: today and the next two days.
+      await (offsetFromToday >= 0 && offsetFromToday <= 2
+        ? withDepartures(liveCalendarItems)
+        : Promise.resolve(liveCalendarItems)
+      ).then((items) =>
+        items.sort((left, right) => calendarStart(left) - calendarStart(right)),
       )
     : rebaseDemoAgenda(date, timeZone, generatedAt);
   const icalSource: BriefingSourceStatus = icalResult.ok
@@ -459,7 +468,7 @@ export async function getBriefingPayload(
           timeZone,
           nowMs,
           agenda,
-          calendarLive: icalResult.ok || homeCalendarResult.ok,
+          calendarLive,
           weather: weatherResult.ok ? weather : undefined,
           hourlyWeather,
           liveWeather: weatherResult.ok ? weatherResult : undefined,
@@ -486,6 +495,9 @@ export async function getBriefingPayload(
       occasions: extras?.occasions,
       headsUp: extras?.headsUp,
       dailyBrief: extras?.dailyBrief,
+      outdoorWindow: weatherResult.ok
+        ? outdoorWindow({ hourly: hourlyWeather, events: agenda, date, nowMs, timeZone })
+        : undefined,
       upcomingReleases,
       agenda: recentAgenda,
       weather,
