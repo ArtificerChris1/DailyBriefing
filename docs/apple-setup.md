@@ -63,10 +63,12 @@ Ticking a reminder off on the site only hides it on that device until the next s
 
 ## Photo of the day
 
-The build picks one photo a day from an iCloud Shared Album and publishes a copy of it.
+The build picks one photo a day from a shared album in iCloud Photos and publishes an encrypted copy of it.
 
-1. In **Photos** on iPhone, create a Shared Album (or use an existing one) and add the photos you want to see. The build encrypts the day's photo before publishing it.
-2. Open the album, tap the **People** icon, and turn on **Public Website**. Tap **Share Link** and copy it; it looks like `https://www.icloud.com/sharedalbum/#B0aGWZuqDGKrA9R`.
+1. In **Photos** on iPhone, create a shared album and add the photos you want to see.
+2. Turn on public sharing for the album and copy its link. Current versions of Photos give a link like `https://photos.icloud.com/shared/album/073nu2tgF-A0JjfGnP7bdoRhA`; older shared albums with **Public Website** on give `https://www.icloud.com/sharedalbum/#B0aGWZuqDGKrA9R`. Both work.
 3. Add the link as an `ICLOUD_SHARED_ALBUM_URL` secret under **Settings > Environments > github-pages**, and to `.env.local` to try it locally.
 
-Videos are skipped. The photo's caption and the date it was taken appear under it. Apple does not document the feed behind public albums, so if Apple changes it the card simply disappears until the provider is updated.
+Keep the link private. Anyone who has it can see the album, see the owner's name and email address, and, with the current link format, add photos to it.
+
+Videos are skipped. The date each photo was taken appears under it. Apple does not document the services behind these links, so if Apple changes them the card simply disappears until the provider is updated.
