@@ -111,6 +111,15 @@ export function DailyBriefCard({ brief, viewMode }: { brief: DailyBrief; viewMod
           </span>
         )}
       </div>
+      <BriefBody brief={brief} />
+    </section>
+  );
+}
+
+/** Claude's headline and points; shared with the evening Tomorrow card. */
+export function BriefBody({ brief }: { brief: DailyBrief }) {
+  return (
+    <>
       <p className="brief-headline">{brief.headline}</p>
       {brief.points.length > 0 && (
         <ul className="brief-points">
@@ -129,7 +138,7 @@ export function DailyBriefCard({ brief, viewMode }: { brief: DailyBrief; viewMod
         </ul>
       )}
       <p className="brief-note">Written by Claude from the facts on this page. Check anything important.</p>
-    </section>
+    </>
   );
 }
 

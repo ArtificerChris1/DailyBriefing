@@ -52,6 +52,8 @@ export interface CalendarItem extends BaseItem<"calendar"> {
   sourceLabel: string;
   /** When to leave home to arrive on time; see lib/server/travel.ts. */
   departure?: Departure;
+  /** A placeholder block named in IGNORED_EVENT_TITLES; see lib/server/holds.ts. */
+  hold?: boolean;
 }
 
 /** Estimated drive from home, without live traffic. */

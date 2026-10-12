@@ -3673,3 +3673,18 @@ a:focus-visible {
   font-size: 11px;
   line-height: 1.45;
 }
+
+/* Reminders due by tomorrow, inside "Tomorrow at a glance". */
+.tomorrow-reminders {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tomorrow-reminders li {
+  margin-top: 4px;
+}
+
+.tomorrow-reminders strong {
+  font-size: 12px;
+}

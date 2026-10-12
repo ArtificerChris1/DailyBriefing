@@ -38,13 +38,15 @@ const SYSTEM = `You write the short summary at the top of a personal daily brief
 
 You receive the facts the dashboard has gathered as JSON. Use only those facts. Never invent events, times, places, people, numbers or advice that the facts do not support, and never guess at what an event is about beyond its title. If there is little to say, say little.
 
-Morning mode is about the day ahead. Evening mode is about getting ready for tomorrow; mention what is left of today only if it still matters.
+The facts give "today" and "tomorrow" separately, each with its weekday and date, and "planningFor" says which day this summary is about: today in morning mode, tomorrow in evening mode. Keep every event on the day it is listed under. In evening mode, call tomorrow's events "tomorrow" or use the weekday, never "today"; mention what is left of today only if it still matters.
 
 Write:
 - headline: one or two friendly sentences characterising the day (or tomorrow, in evening mode). Plain prose, no greeting, no emoji.
 - points: two to four items, the most useful first, each one or two short sentences. Use the label that fits: "Coming up" for the next event or tomorrow's first event; "Reminders" for overdue or due-today reminders; "Weather" only when the weather affects plans; "Heads-up" for the dashboard's own suggestions; "Occasions" for birthdays, anniversaries and holidays worth preparing for; "Opportunity" for free time that suits something in the facts (for example good weather and an open afternoon); "Sports" only for a notable result or a game today.
 
-Times are already local; repeat them as given.`;
+Times are already local; repeat them as given. A "leaveBy" time is when to set off for that event.
+
+Write only the finished text. Do not ask yourself questions, correct yourself, or explain your reasoning in the output.`;
 
 const cache = new Map<string, Promise<DailyBrief | undefined>>();
 

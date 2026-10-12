@@ -42,6 +42,7 @@ import { fetchOpenMeteoWeather } from "@/lib/providers/weather/open-meteo";
 import { recencyCutoff, withinRecencyWindow } from "@/lib/recency";
 import { withRankMovement } from "@/lib/server/bgg-history";
 import { withNewsSummaries } from "@/lib/server/news-summaries";
+import { markHolds } from "@/lib/server/holds";
 import { getReminders } from "@/lib/server/reminders";
 import { todayExtras } from "@/lib/server/today-extras";
 import { withDepartures } from "@/lib/server/travel";
@@ -264,10 +265,10 @@ export async function getBriefingPayload(
     fetchUpcomingReleases(date),
   ]);
 
-  const liveCalendarItems = [
+  const liveCalendarItems = markHolds([
     ...(icalResult.ok ? icalResult.items : []),
     ...(homeCalendarResult.ok ? homeCalendarResult.items : []),
-  ];
+  ]);
   const calendarLive = icalResult.ok || homeCalendarResult.ok;
   const offsetFromToday = dayOffsetBetween(today, date);
   const agenda = calendarLive

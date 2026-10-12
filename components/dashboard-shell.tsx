@@ -729,7 +729,7 @@ export function DashboardShell({
   const now = nowMs;
   const nextEvent =
     agenda.find((item) => {
-      if (item.status === "cancelled") return false;
+      if (item.status === "cancelled" || item.hold) return false;
       if (item.time.mode === "all-day") return true;
       return new Date(item.time.end ?? item.time.start).getTime() >= now;
     }) ??
@@ -985,13 +985,16 @@ export function DashboardShell({
           </header>
 
           <div className="dashboard-grid">
-            {isToday && briefing.dailyBrief && (
+            {isToday && !showEvening && briefing.dailyBrief && (
               <DailyBriefCard brief={briefing.dailyBrief} viewMode={dayMode} />
             )}
             {showEvening && (
               <TomorrowCard
                 tomorrow={tomorrowPayload?.briefing.date === tomorrowDate ? tomorrowPayload : undefined}
-                openReminders={openReminderCount}
+                // A summary written for the morning would describe today, not tomorrow.
+                brief={briefing.dailyBrief?.mode === "evening" ? briefing.dailyBrief : undefined}
+                reminders={shownReminders.filter((item) => !completedReminders.includes(item.id))}
+                today={briefing.today}
                 timeZone={timeZone}
               />
             )}

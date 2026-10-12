@@ -35,18 +35,6 @@ export const HEADS_UP_PRIORITY: Record<HeadsUpItem["kind"], number> = {
   "missing-location": 5,
 };
 
-/**
- * Comma-separated title fragments to leave out of every check, for
- * placeholders such as "Check with me prior to scheduling". Matched case-
- * insensitively anywhere in the title.
- */
-function ignoredTitles(): string[] {
-  return (process.env.HEADS_UP_IGNORE_TITLES ?? "")
-    .split(",")
-    .map((part) => part.trim().toLowerCase())
-    .filter(Boolean);
-}
-
 export interface CalendarDay {
   date: string;
   agenda: CalendarItem[];
@@ -112,9 +100,8 @@ export function headsUpFor({
   overdueReminders: number;
 }): HeadsUpItem[] {
   const found: HeadsUpItem[] = [];
-  const ignored = ignoredTitles();
-  const considered = (item: CalendarItem) =>
-    !ignored.some((fragment) => item.title.toLowerCase().includes(fragment));
+  // Holds are placeholders, not plans; see lib/server/holds.ts.
+  const considered = (item: CalendarItem) => !item.hold;
 
   for (const [dayIndex, day] of days.entries()) {
     const events = day.agenda

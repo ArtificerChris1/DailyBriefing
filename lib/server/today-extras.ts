@@ -18,6 +18,7 @@ import { upcomingOccasions } from "@/lib/occasions";
 import { groupReminders } from "@/lib/priorities";
 import { fetchIcalCalendar } from "@/lib/providers/ical/calendar";
 import { dailyBrief } from "@/lib/server/daily-brief";
+import { markHolds } from "@/lib/server/holds";
 import { withDepartures } from "@/lib/server/travel";
 import { weatherAlerts } from "@/lib/weather-plans";
 
@@ -44,7 +45,7 @@ function calendarDay(date: string, timeZone: string, localTimeToIso: LocalTime) 
       fetchIcalCalendar({ feed: "work", from, to, timeZone }),
       fetchIcalCalendar({ feed: "home", from, to, timeZone }),
     ])
-      .then((results) => results.flatMap((result) => (result.ok ? result.items : [])))
+      .then((results) => markHolds(results.flatMap((result) => (result.ok ? result.items : []))))
       .then(withDepartures);
     dayCache.set(key, pending);
   }
@@ -76,6 +77,16 @@ function eventFact(item: CalendarItem, timeZone: string) {
     calendar: item.source.provider === "apple-calendar" ? "home" : "work",
     ...(item.status !== "confirmed" ? { status: item.status } : {}),
   };
+}
+
+/** "Monday, Oct 12", so no event is ever placed on the wrong day. */
+function dayLabel(date: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(Date.parse(`${date}T12:00:00Z`));
 }
 
 function weatherFact(weather: WeatherItem, hourly: HourlyWeatherPoint[], timeZone: string) {
@@ -157,6 +168,8 @@ export async function todayExtras({
   const tomorrow = shiftDateKey(today, 1);
   const tomorrowWeather = liveWeather?.dailyWeather.find((day) => day.startsOn === tomorrow);
   // Sample data must never reach the summary: it would be written up as fact.
+  const visible = (items: CalendarItem[]) =>
+    items.filter((item) => item.status !== "cancelled" && !item.hold);
   const facts: Record<string, unknown> = {
     now: new Intl.DateTimeFormat("en-US", {
       weekday: "long",
@@ -166,33 +179,38 @@ export async function todayExtras({
       minute: "2-digit",
       timeZone,
     }).format(nowMs),
-    ...(calendarLive
-      ? {
-          todayEvents: agenda
-            .filter((item) => item.status !== "cancelled")
-            .map((item) => ({
+    planningFor: mode === "evening" ? `tomorrow, ${dayLabel(tomorrow)}` : `today, ${dayLabel(today)}`,
+    today: {
+      date: dayLabel(today),
+      ...(calendarLive
+        ? {
+            events: visible(agenda).map((item) => ({
               ...eventFact(item, timeZone),
               ...(item.time.mode === "timed" &&
               Date.parse(item.time.end ?? item.time.start) < nowMs
                 ? { finished: true }
                 : {}),
             })),
-          tomorrowEvents: (days[1]?.agenda ?? [])
-            .filter((item) => item.status !== "cancelled")
-            .map((item) => eventFact(item, timeZone)),
-        }
-      : {}),
-    ...(weather && liveWeather ? { weatherToday: weatherFact(weather, hourlyWeather, timeZone) } : {}),
-    ...(tomorrowWeather
-      ? {
-          weatherTomorrow: {
-            condition: tomorrowWeather.condition,
-            high: `${tomorrowWeather.high}°${tomorrowWeather.unit}`,
-            low: `${tomorrowWeather.low}°${tomorrowWeather.unit}`,
-            rainChance: `${tomorrowWeather.precipitationChance}%`,
-          },
-        }
-      : {}),
+          }
+        : {}),
+      ...(weather && liveWeather ? { weather: weatherFact(weather, hourlyWeather, timeZone) } : {}),
+    },
+    tomorrow: {
+      date: dayLabel(tomorrow),
+      ...(calendarLive
+        ? { events: visible(days[1]?.agenda ?? []).map((item) => eventFact(item, timeZone)) }
+        : {}),
+      ...(tomorrowWeather
+        ? {
+            weather: {
+              condition: tomorrowWeather.condition,
+              high: `${tomorrowWeather.high}°${tomorrowWeather.unit}`,
+              low: `${tomorrowWeather.low}°${tomorrowWeather.unit}`,
+              rainChance: `${tomorrowWeather.precipitationChance}%`,
+            },
+          }
+        : {}),
+    },
     ...(reminders
       ? {
           reminders: {
@@ -207,6 +225,7 @@ export async function todayExtras({
       .map((item) => ({
         name: item.name,
         kind: item.kind,
+        date: dayLabel(item.date),
         inDays: item.offset,
         ...(item.detail ? { detail: item.detail } : {}),
       })),
