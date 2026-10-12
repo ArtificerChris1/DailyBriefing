@@ -1360,12 +1360,41 @@ a:focus-visible {
   position: relative;
   display: grid;
   min-height: 60px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 13px 0;
+  border-bottom: 1px solid #ecece8;
+}
+
+.reminder-check {
+  position: relative;
+  display: grid;
   grid-template-columns: 22px 1fr;
   align-items: start;
   gap: 10px;
-  padding: 13px 0;
-  border-bottom: 1px solid #ecece8;
   cursor: pointer;
+}
+
+.reminder-actions {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.reminder-overdue .reminder-copy small {
+  color: var(--now);
+}
+
+.reminder-group .reminder-list {
+  padding-top: 2px;
+  padding-bottom: 4px;
+}
+
+.reminder-note {
+  margin: 0;
+  padding: 4px 22px 16px;
+  color: var(--ink-faint);
+  font-size: 10px;
 }
 
 .reminder-item:last-child {
@@ -3237,4 +3266,129 @@ a:focus-visible {
 .news-lanes > .sports-controls {
   grid-column: 1 / -1;
   padding: 0;
+}
+
+/* Top 3 today / Carry forward. */
+.dashboard-grid > .priorities-card {
+  grid-column: 1 / -1;
+}
+
+.priorities-card .section-heading {
+  align-items: center;
+}
+
+.priorities-card .section-heading h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.priority-form {
+  display: flex;
+  gap: 8px;
+  padding: 12px 22px 0;
+}
+
+.priority-form input {
+  flex: 1;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+}
+
+.priority-form button {
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--green);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.priority-form button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.priorities-empty {
+  margin: 0;
+  padding: 12px 22px 20px;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.priorities-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px 22px 20px;
+  list-style: none;
+}
+
+@media (min-width: 681px) {
+  .priorities-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.priorities-list li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fcfcfa;
+}
+
+.priority-rank {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.priority-copy strong,
+.priority-copy small {
+  display: block;
+}
+
+.priority-copy strong {
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.priority-copy small {
+  margin-top: 3px;
+  color: var(--ink-faint);
+  font-size: 10px;
+}
+
+.priority-reason {
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #eef0ec;
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.priority-reason-overdue {
+  background: #fbe7e2;
+  color: var(--now);
+}
+
+.priority-reason-pinned,
+.priority-reason-your-priority {
+  background: var(--green-soft);
+  color: var(--green);
 }

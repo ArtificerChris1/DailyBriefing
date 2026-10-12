@@ -13,6 +13,7 @@ import {
   Cloud,
   CloudRain,
   CloudSun,
+  Clock,
   Eye,
   EyeOff,
   FileText,
@@ -22,6 +23,8 @@ import {
   MapPin,
   Moon,
   Newspaper,
+  Pin,
+  PinOff,
   RefreshCw,
   RotateCcw,
   Settings2,
@@ -74,7 +77,14 @@ import {
   groupSports,
   type DayMode,
 } from "@/lib/briefing-view";
+import { PrioritiesCard } from "@/components/priorities-card";
 import { TomorrowCard } from "@/components/tomorrow-card";
+import {
+  dueLabel,
+  groupReminders,
+  topPriorities,
+  type CustomPriority,
+} from "@/lib/priorities";
 import {
   fetchLocalWeather,
   withLocalWeather,
@@ -343,6 +353,11 @@ export function DashboardShell({
   const [modeOverride, setModeOverride] = useState<DayMode | null>(null);
   const [tomorrowPayload, setTomorrowPayload] = useState<BriefingPayload>();
   const [completedReminders, setCompletedReminders] = useState<string[]>([]);
+  // Device-local, like completedReminders: the site cannot write to Reminders.
+  const [pinnedReminders, setPinnedReminders] = useState<string[]>([]);
+  const [customPriorities, setCustomPriorities] = useState<CustomPriority[]>([]);
+  /** Reminder id → the first day it shows again. */
+  const [snoozedReminders, setSnoozedReminders] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<string | null>(null);
   const nowMs = useNow(Date.parse(initialPayload.briefing.generatedAt));
   const localWeatherRef = useRef<LiveWeather | undefined>(undefined);
@@ -460,6 +475,19 @@ export function DashboardShell({
           window.localStorage.removeItem("brief-completed-reminders");
         }
       }
+      for (const [key, apply] of [
+        ["brief-pinned-reminders", (value: unknown) => Array.isArray(value) && setPinnedReminders(value as string[])],
+        ["brief-custom-priorities", (value: unknown) => Array.isArray(value) && setCustomPriorities(value as CustomPriority[])],
+        ["brief-snoozed-reminders", (value: unknown) => value && typeof value === "object" && setSnoozedReminders(value as Record<string, string>)],
+      ] as const) {
+        const saved = window.localStorage.getItem(key);
+        if (!saved) continue;
+        try {
+          apply(JSON.parse(saved));
+        } catch {
+          window.localStorage.removeItem(key);
+        }
+      }
       setPreferencesReady(true);
     }, 0);
 
@@ -480,6 +508,13 @@ export function DashboardShell({
       JSON.stringify(completedReminders),
     );
   }, [completedReminders, preferencesReady]);
+
+  useEffect(() => {
+    if (!preferencesReady) return;
+    window.localStorage.setItem("brief-pinned-reminders", JSON.stringify(pinnedReminders));
+    window.localStorage.setItem("brief-custom-priorities", JSON.stringify(customPriorities));
+    window.localStorage.setItem("brief-snoozed-reminders", JSON.stringify(snoozedReminders));
+  }, [pinnedReminders, customPriorities, snoozedReminders, preferencesReady]);
 
   // The baked-in weather is for the configured location. Where the browser
   // allows it, fetch the forecast for wherever the viewer actually is.
@@ -587,13 +622,38 @@ export function DashboardShell({
     );
   }
 
+  function togglePin(id: string) {
+    setPinnedReminders((current) =>
+      current.includes(id) ? current.filter((pinnedId) => pinnedId !== id) : [...current, id],
+    );
+  }
+
+  function snoozeReminder(id: string) {
+    setSnoozedReminders((current) => ({ ...current, [id]: shiftDateKey(briefing.today, 1) }));
+    notify("Hidden on this device until tomorrow");
+  }
+
+  function addCustomPriority(title: string) {
+    setCustomPriorities((current) => [...current, { id: `custom-${Date.now()}`, title }]);
+  }
+
+  function removeCustomPriority(id: string) {
+    setCustomPriorities((current) => current.filter((priority) => priority.id !== id));
+  }
+
   function resetDemo() {
     setPreferences(defaultPreferences);
     setShowAllSports(false);
     setShowAllReleases(false);
     setCompletedReminders([]);
+    setPinnedReminders([]);
+    setCustomPriorities([]);
+    setSnoozedReminders({});
     window.localStorage.removeItem("brief-preferences");
     window.localStorage.removeItem("brief-completed-reminders");
+    window.localStorage.removeItem("brief-pinned-reminders");
+    window.localStorage.removeItem("brief-custom-priorities");
+    window.localStorage.removeItem("brief-snoozed-reminders");
     notify("Prototype preferences reset");
   }
 
@@ -632,8 +692,26 @@ export function DashboardShell({
       ),
     0,
   );
-  const openReminderCount =
-    briefing.reminders?.items.filter((item) => !completedReminders.includes(item.id)).length ?? 0;
+  // Snoozed reminders stay hidden until the day they were snoozed to.
+  const shownReminders = (briefing.reminders?.items ?? []).filter(
+    (item) => !(snoozedReminders[item.id] && snoozedReminders[item.id] > briefing.today),
+  );
+  const reminderGroups = groupReminders(shownReminders, briefing.today, timeZone);
+  const openReminderGroups = groupReminders(
+    shownReminders.filter((item) => !completedReminders.includes(item.id)),
+    briefing.today,
+    timeZone,
+  );
+  const openReminderCount = shownReminders.filter(
+    (item) => !completedReminders.includes(item.id),
+  ).length;
+  const priorities = topPriorities({
+    groups: openReminderGroups,
+    pinned: pinnedReminders,
+    custom: customPriorities,
+    today: briefing.today,
+    timeZone,
+  });
   const releaseHeadline = headlines.find((headline) => headline.lane === "events");
   const now = nowMs;
   const nextEvent =
@@ -890,6 +968,15 @@ export function DashboardShell({
                 timeZone={timeZone}
               />
             )}
+            {isToday && preferences.showReminders && (
+              <PrioritiesCard
+                title={showEvening ? "Carry forward" : "Top 3 today"}
+                entries={priorities}
+                onComplete={toggleReminder}
+                onRemoveCustom={removeCustomPriority}
+                onAddCustom={addCustomPriority}
+              />
+            )}
             <section className="card next-card" aria-labelledby="next-title">
               <SectionHeading title={isToday ? "Up Next" : "First event"} />
               {nextEvent && nextEventParts ? (
@@ -1040,31 +1127,79 @@ export function DashboardShell({
               <section className="card reminders-card" aria-labelledby="reminders-title">
                 <SectionHeading
                   title="Reminders"
-                  action={<span className="item-count">{briefing.reminders.items.length}</span>}
+                  action={<span className="item-count">{openReminderCount}</span>}
                 />
-                {briefing.reminders.items.length === 0 ? (
+                {shownReminders.length === 0 ? (
                   <p className="hotness-message" id="reminders-title">
                     Nothing open in Apple Reminders.
                   </p>
                 ) : (
-                  <div className="reminder-list" id="reminders-title">
-                    {briefing.reminders.items.map((item) => {
-                      const isComplete = completedReminders.includes(item.id);
-                      return (
-                        <label className={`reminder-item ${isComplete ? "reminder-complete" : ""}`} key={item.id}>
-                          <input
-                            type="checkbox"
-                            checked={isComplete}
-                            onChange={() => toggleReminder(item.id)}
-                          />
-                          <span className="custom-check" aria-hidden="true"><Check size={13} /></span>
-                          <span className="reminder-copy">
-                            <strong>{item.title}</strong>
-                            <small>{item.dueLabel} · {item.listLabel}</small>
-                          </span>
-                        </label>
-                      );
-                    })}
+                  <div id="reminders-title">
+                    {[
+                      { id: "overdue", title: "Overdue · carried over", items: reminderGroups.overdue },
+                      { id: "today", title: "Today", items: reminderGroups.today },
+                      { id: "upcoming", title: "Upcoming", items: reminderGroups.upcoming },
+                      { id: "undated", title: "No due date", items: reminderGroups.undated },
+                    ]
+                      .filter((group) => group.items.length > 0)
+                      .map((group) => (
+                        <div className="reminder-group" key={group.id}>
+                          <h3 className="list-group-title">{group.title}</h3>
+                          <div className="reminder-list">
+                            {group.items.map((item) => {
+                              const isComplete = completedReminders.includes(item.id);
+                              const isPinned = pinnedReminders.includes(item.id);
+                              return (
+                                <div
+                                  className={`reminder-item ${isComplete ? "reminder-complete" : ""} ${group.id === "overdue" ? "reminder-overdue" : ""}`}
+                                  key={item.id}
+                                >
+                                  <label className="reminder-check">
+                                    <input
+                                      type="checkbox"
+                                      checked={isComplete}
+                                      onChange={() => toggleReminder(item.id)}
+                                    />
+                                    <span className="custom-check" aria-hidden="true"><Check size={13} /></span>
+                                    <span className="reminder-copy">
+                                      <strong>{item.title}</strong>
+                                      <small>
+                                        {dueLabel(item, briefing.today, timeZone)} · {item.listLabel}
+                                      </small>
+                                    </span>
+                                  </label>
+                                  <span className="reminder-actions">
+                                    <button
+                                      type="button"
+                                      className="row-action"
+                                      onClick={() => togglePin(item.id)}
+                                      aria-pressed={isPinned}
+                                      aria-label={isPinned ? `Unpin ${item.title}` : `Pin ${item.title} to the top 3`}
+                                      title={isPinned ? "Unpin" : "Pin to top 3"}
+                                    >
+                                      {isPinned ? <PinOff size={15} /> : <Pin size={15} />}
+                                    </button>
+                                    {!isComplete && (
+                                      <button
+                                        type="button"
+                                        className="row-action"
+                                        onClick={() => snoozeReminder(item.id)}
+                                        aria-label={`Snooze ${item.title} until tomorrow`}
+                                        title="Snooze until tomorrow"
+                                      >
+                                        <Clock size={15} />
+                                      </button>
+                                    )}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    <p className="reminder-note">
+                      Ticks, pins and snoozes are kept on this device; Apple Reminders updates when the Shortcut runs.
+                    </p>
                   </div>
                 )}
               </section>
