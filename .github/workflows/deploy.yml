@@ -93,6 +93,7 @@ jobs:
           THESPORTSDB_API_KEY: ${{ secrets.THESPORTSDB_API_KEY }}
           REMINDERS_KEY: ${{ secrets.REMINDERS_KEY }}
           ICLOUD_SHARED_ALBUM_URL: ${{ secrets.ICLOUD_SHARED_ALBUM_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # Non-secret settings, from repository variables. Unset ones fall
           # back to the defaults documented in .env.example.
           OPEN_METEO_LATITUDE: ${{ vars.OPEN_METEO_LATITUDE }}
@@ -102,6 +103,8 @@ jobs:
           OPEN_METEO_TEMPERATURE_UNIT: ${{ vars.OPEN_METEO_TEMPERATURE_UNIT }}
           TMDB_REGION: ${{ vars.TMDB_REGION }}
           COMICVINE_PUBLISHERS: ${{ vars.COMICVINE_PUBLISHERS }}
+          HEADS_UP_IGNORE_TITLES: ${{ vars.HEADS_UP_IGNORE_TITLES }}
+          BRIEF_MODEL: ${{ vars.BRIEF_MODEL }}
 
       - uses: actions/upload-pages-artifact@v5
         with:

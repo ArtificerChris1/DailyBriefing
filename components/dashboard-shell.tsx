@@ -77,6 +77,7 @@ import {
   groupSports,
   type DayMode,
 } from "@/lib/briefing-view";
+import { DailyBriefCard, HeadsUpCard, OccasionsCard } from "@/components/plan-ahead";
 import { PrioritiesCard } from "@/components/priorities-card";
 import { TomorrowCard } from "@/components/tomorrow-card";
 import {
@@ -961,6 +962,9 @@ export function DashboardShell({
           </header>
 
           <div className="dashboard-grid">
+            {isToday && briefing.dailyBrief && (
+              <DailyBriefCard brief={briefing.dailyBrief} viewMode={dayMode} />
+            )}
             {showEvening && (
               <TomorrowCard
                 tomorrow={tomorrowPayload?.briefing.date === tomorrowDate ? tomorrowPayload : undefined}
@@ -975,6 +979,13 @@ export function DashboardShell({
                 onComplete={toggleReminder}
                 onRemoveCustom={removeCustomPriority}
                 onAddCustom={addCustomPriority}
+              />
+            )}
+            {isToday && (
+              <HeadsUpCard
+                items={briefing.headsUp ?? []}
+                occasions={briefing.occasions ?? []}
+                reminders={shownReminders}
               />
             )}
             <section className="card next-card" aria-labelledby="next-title">
@@ -1396,6 +1407,8 @@ export function DashboardShell({
                 )}
               </section>
             )}
+
+            {isToday && briefing.occasions && <OccasionsCard occasions={briefing.occasions} />}
 
             {briefing.birthdays && (
               <section className="card birthdays-card" aria-labelledby="birthdays-title">

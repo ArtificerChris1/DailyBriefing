@@ -61,6 +61,10 @@ GitHub answers with an empty response when it accepts the request. The site upda
 
 Ticking a reminder off on the site only hides it on that device until the next snapshot; the site cannot change Apple Reminders.
 
+### 4. Optional: "Add to Reminders" from suggestions
+
+The "You might have forgotten" card can hand a suggestion to Reminders on iPhone, iPad and Mac. Create a second Shortcut named exactly **Add Briefing Reminder** with one action, **Add New Reminder**, whose title is **Shortcut Input**. The card's **Add to Reminders** button runs it with the suggestion's text.
+
 ## Photo of the day
 
 The build picks one photo a day from a shared album in iCloud Photos and publishes an encrypted copy of it.

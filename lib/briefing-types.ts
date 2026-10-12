@@ -257,6 +257,44 @@ export interface PhotoOfDay {
   albumName?: string;
 }
 
+/** A family occasion or holiday in the next three weeks; see lib/occasions.ts. */
+export interface OccasionItem {
+  id: string;
+  name: string;
+  kind: "birthday" | "anniversary" | "holiday";
+  /** `YYYY-MM-DD`. */
+  date: string;
+  /** Days from today. */
+  offset: number;
+  dateLabel: string;
+  detail?: string;
+  /** Whether a gift or card is usual, so it is worth tracking as sorted. */
+  giftable: boolean;
+}
+
+/**
+ * Something that may need attention, found by a rule rather than written in
+ * Reminders: overlapping events, a missing location, an unusually early
+ * start. Always presented as a suggestion, never as a confirmed obligation.
+ */
+export interface HeadsUpItem {
+  id: string;
+  kind: "overlap" | "missing-location" | "early-start" | "free-time" | "weather" | "gift";
+  title: string;
+  detail: string;
+  /** Text for a new reminder, when acting on it means remembering to do something. */
+  reminderText?: string;
+}
+
+/** The AI-written summary at the top of today's page. */
+export interface DailyBrief {
+  /** Which view it was written for: the day ahead, or tomorrow. */
+  mode: "morning" | "evening";
+  headline: string;
+  points: { label: string; text: string }[];
+  generatedAt: string;
+}
+
 export interface BriefingSnapshot {
   generatedAt: string;
   /** The day being shown, which the pager can move away from today. */
@@ -275,6 +313,12 @@ export interface BriefingSnapshot {
   reminders?: RemindersPanel;
   /** Today's page only, and only when a shared album is configured. */
   photo?: PhotoOfDay;
+  /** Today's page only: occasions in the next three weeks. */
+  occasions?: OccasionItem[];
+  /** Today's page only: rule-based suggestions from the next few days. */
+  headsUp?: HeadsUpItem[];
+  /** Today's page only, and only when an Anthropic API key is configured. */
+  dailyBrief?: DailyBrief;
   agenda: CalendarItem[];
   weather: WeatherItem;
   hourlyWeather: HourlyWeatherPoint[];

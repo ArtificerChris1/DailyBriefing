@@ -36,6 +36,7 @@ import { fetchLiveSports } from "@/lib/providers/sports/live-sports";
 import { fetchOpenMeteoWeather } from "@/lib/providers/weather/open-meteo";
 import { recencyCutoff, withinRecencyWindow } from "@/lib/recency";
 import { getReminders } from "@/lib/server/reminders";
+import { todayExtras } from "@/lib/server/today-extras";
 
 function nextDate(date: string): string {
   const [year, month, day] = date.split("-").map(Number);
@@ -451,6 +452,22 @@ export async function getBriefingPayload(
     headlineSource,
   ];
   const hasLiveSource = sources.some((source) => source.state === "live");
+  const extras =
+    date === today
+      ? await todayExtras({
+          today,
+          timeZone,
+          nowMs,
+          agenda,
+          calendarLive: icalResult.ok || homeCalendarResult.ok,
+          weather: weatherResult.ok ? weather : undefined,
+          hourlyWeather,
+          liveWeather: weatherResult.ok ? weatherResult : undefined,
+          reminders: reminders?.items,
+          sports: recentSports,
+          localTimeToIso,
+        })
+      : undefined;
   const hasDemoSource = sources.some((source) => source.state === "demo");
 
   return {
@@ -466,6 +483,9 @@ export async function getBriefingPayload(
       birthdays: birthdaysInWindow(date),
       reminders,
       photo: photoResult?.photo,
+      occasions: extras?.occasions,
+      headsUp: extras?.headsUp,
+      dailyBrief: extras?.dailyBrief,
       upcomingReleases,
       agenda: recentAgenda,
       weather,
