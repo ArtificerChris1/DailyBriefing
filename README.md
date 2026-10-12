@@ -62,9 +62,9 @@ Use an IANA time-zone name such as `America/Chicago`. Forecast days can be 1–1
 
 ## Deploy to GitHub Pages
 
-[.github/workflows/deploy.yml](.github/workflows/deploy.yml) builds the site with `next build` and publishes the `out/` folder. It runs daily at 10:00 UTC (5am Central in summer, 4am in winter), on every push to `main`, and on demand from the **Actions** tab.
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml) builds the site with `next build` and publishes the `out/` folder. It runs every two hours from 5am to 11pm Central, on every push to `main`, when the Reminders Shortcut sends a snapshot, and on demand from the **Actions** tab. An open page checks for a newer build every ten minutes and offers to reload; returning to the page reloads automatically.
 
-Every provider runs during that build, so the briefing is a snapshot: scores, calendars, and headlines are as fresh as the last run. Each page of the day pager is a static file, `/briefing/YYYY-MM-DD.json`, covering a week back and two weeks ahead. Weather is the one live part: when the browser allows location access, it fetches the forecast for where you are straight from Open-Meteo.
+Every provider runs during that build, so the briefing is a snapshot: scores, calendars, and headlines are as fresh as the last run. After 5pm the page switches to an evening view that leads with tomorrow; the header button switches between morning and evening for the current visit. Each page of the day pager is a static file, `/briefing/YYYY-MM-DD.json`, covering a week back and two weeks ahead. Weather is the one live part: when the browser allows location access, it fetches the forecast for where you are straight from Open-Meteo.
 
 One-time setup:
 

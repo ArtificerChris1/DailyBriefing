@@ -10,9 +10,10 @@ name: Build and deploy briefing
 
 on:
   schedule:
-    # 10:00 UTC is 5am Central during daylight saving time and 4am in winter.
-    # GitHub may start scheduled runs some minutes late.
-    - cron: "0 10 * * *"
+    # Every two hours from 5am to 11pm Central during daylight saving time
+    # (10:00 to 04:00 UTC); an hour earlier in winter. GitHub can start
+    # scheduled runs late, sometimes by hours when it is busy.
+    - cron: "0 0,2,4,10,12,14,16,18,20,22 * * *"
   push:
     branches: [main]
   workflow_dispatch:

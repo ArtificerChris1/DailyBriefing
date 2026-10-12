@@ -9,6 +9,11 @@ const nextConfig: NextConfig = {
   // every provider runs then rather than on a server.
   output: "export",
   basePath,
+  env: {
+    // Identifies this build to the page, which compares it with /build.json
+    // to notice when a newer one has been deployed.
+    NEXT_PUBLIC_BUILD_ID: String(Date.now()),
+  },
   experimental: {
     // Render the 22 day files one at a time in one process, so each provider's
     // in-memory cache is shared between them. In parallel, every day fetched

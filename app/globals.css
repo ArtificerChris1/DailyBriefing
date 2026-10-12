@@ -3072,3 +3072,169 @@ a:focus-visible {
   font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   resize: vertical;
 }
+
+/* Morning/evening switch in the page header. */
+.mode-toggle {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.mode-toggle:hover {
+  border-color: #bdc3bd;
+  background: #fff;
+}
+
+/* Evening view: tomorrow at a glance, across the full width. */
+.dashboard-grid > .tomorrow-card {
+  grid-column: 1 / -1;
+}
+
+.tomorrow-card .section-heading h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tomorrow-loading {
+  margin: 0;
+  padding: 12px 22px 20px;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.tomorrow-grid {
+  display: grid;
+  gap: 14px;
+  padding: 14px 22px 20px;
+}
+
+@media (min-width: 681px) {
+  .tomorrow-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.tomorrow-item {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  color: var(--ink-soft);
+}
+
+.tomorrow-item small,
+.tomorrow-item strong,
+.tomorrow-item span {
+  display: block;
+}
+
+.tomorrow-item small {
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tomorrow-item strong {
+  margin-top: 2px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.tomorrow-item span {
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+/* Sub-headings inside the grouped sports and release lists. */
+.list-group-title {
+  margin: 14px 22px 0;
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.sports-group .sports-list {
+  padding-top: 4px;
+}
+
+.upcoming-games {
+  margin: 0;
+  padding: 6px 22px 8px;
+  list-style: none;
+}
+
+.upcoming-games li {
+  display: grid;
+  min-height: 36px;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #ecece8;
+  font-size: 12px;
+}
+
+.upcoming-games li:last-child {
+  border-bottom: 0;
+}
+
+.upcoming-games span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upcoming-games time {
+  color: var(--ink-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Shown when a newer build has been deployed while the page was open. */
+.update-banner {
+  position: sticky;
+  z-index: 30;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--green);
+  color: #fff;
+  font-size: 13px;
+}
+
+.update-banner button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* The news "show more" control spans both lanes. */
+.news-lanes > .sports-controls {
+  grid-column: 1 / -1;
+  padding: 0;
+}

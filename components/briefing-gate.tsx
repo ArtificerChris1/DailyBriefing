@@ -1,6 +1,6 @@
 "use client";
 
-import { Fingerprint, KeyRound, Lock } from "lucide-react";
+import { Fingerprint, KeyRound, Lock, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { DashboardShell } from "@/components/dashboard-shell";
@@ -22,6 +22,10 @@ import type { Keyring, PasskeyEntry, SealedDocument } from "@/lib/vault-format";
 
 /** The site may be served from a subpath, e.g. a GitHub Pages project URL. */
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+/** Stamped by next.config.ts; /build.json reports the one currently deployed. */
+const BUILD_ID = process.env.NEXT_PUBLIC_BUILD_ID ?? "";
+/** How often an open page asks whether a newer build has been deployed. */
+const BUILD_CHECK_MS = 10 * 60 * 1000;
 /** "owner/repo", set by the workflow, for the link to data/passkeys.json. */
 const REPOSITORY = process.env.NEXT_PUBLIC_GITHUB_REPOSITORY ?? "";
 
@@ -77,6 +81,37 @@ async function loadPhoto(
  */
 export function BriefingGate() {
   const [state, setState] = useState<GateState>({ status: "loading" });
+  const [updateReady, setUpdateReady] = useState(false);
+  const openKey = state.status === "open" ? state.key : null;
+  const isOpen = state.status === "open";
+  const loadForShell = useCallback((date: string) => loadDay(date, openKey), [openKey]);
+
+  // The site rebuilds through the day. Coming back to the page picks up a
+  // newer build straight away (the session key unlocks it again without a
+  // prompt); while it stays open, a banner offers the reload instead of
+  // swapping the page out mid-read.
+  useEffect(() => {
+    if (!isOpen || !BUILD_ID) return;
+    async function check(reloadIfNewer: boolean) {
+      try {
+        const { buildId } = await fetchJson<{ buildId?: string }>("/build.json");
+        if (!buildId || buildId === BUILD_ID) return;
+        if (reloadIfNewer) window.location.reload();
+        else setUpdateReady(true);
+      } catch {
+        // Offline or mid-deploy; the next check will try again.
+      }
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") void check(true);
+    }
+    const timer = window.setInterval(() => void check(false), BUILD_CHECK_MS);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [isOpen]);
 
   const open = useCallback(async (rawKey: Uint8Array<ArrayBuffer> | null) => {
     const key = rawKey ? await importDataKey(rawKey) : null;
@@ -125,16 +160,26 @@ export function BriefingGate() {
   }
 
   if (state.status === "open") {
-    const { key, rawKey } = state;
+    const { rawKey } = state;
     return (
-      <DashboardShell
-        initialPayload={state.payload}
-        loadDay={(date) => loadDay(date, key)}
-        photoUrl={state.photoUrl}
-        accountSettings={
-          rawKey ? <AccountSettings rawKey={rawKey} onLock={lock} /> : undefined
-        }
-      />
+      <>
+        {updateReady && (
+          <div className="update-banner" role="status">
+            <span>A newer briefing is ready.</span>
+            <button type="button" onClick={() => window.location.reload()}>
+              <RefreshCw size={14} /> Reload
+            </button>
+          </div>
+        )}
+        <DashboardShell
+          initialPayload={state.payload}
+          loadDay={loadForShell}
+          photoUrl={state.photoUrl}
+          accountSettings={
+            rawKey ? <AccountSettings rawKey={rawKey} onLock={lock} /> : undefined
+          }
+        />
+      </>
     );
   }
 

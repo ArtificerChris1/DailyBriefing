@@ -20,6 +20,7 @@ import {
   Heart,
   Link2,
   MapPin,
+  Moon,
   Newspaper,
   RefreshCw,
   RotateCcw,
@@ -53,7 +54,9 @@ import type {
   ConnectorDefinition,
   HourlyWeatherPoint,
   ProviderId,
+  ReleaseItem,
   ReleaseMedium,
+  SportsItem,
   TrustZone,
 } from "@/lib/briefing-types";
 import {
@@ -62,6 +65,16 @@ import {
   dayOffsetBetween,
   shiftDateKey,
 } from "@/lib/briefing-window";
+import {
+  compactGameTime,
+  dayModeAt,
+  dedupeHeadlines,
+  greetingAt,
+  groupReleases,
+  groupSports,
+  type DayMode,
+} from "@/lib/briefing-view";
+import { TomorrowCard } from "@/components/tomorrow-card";
 import {
   fetchLocalWeather,
   withLocalWeather,
@@ -181,8 +194,13 @@ function eventForecast(item: CalendarItem, hourlyWeather: HourlyWeatherPoint[]) 
 }
 
 /** Games shown before the "show more" fold. */
-const SPORTS_PREVIEW_COUNT = 10;
-const RELEASES_PREVIEW_COUNT = 8;
+/** Compact upcoming games shown before "Show more". */
+const UPCOMING_GAMES_PREVIEW = 5;
+/** Headlines per news lane before "Show more". */
+const HEADLINES_PER_LANE = 5;
+const DAY_MODE_KEY = "brief-day-mode";
+/** Releases per date group before "Show more". */
+const RELEASES_PER_GROUP = 4;
 
 const releaseMedium: Record<
   ReleaseMedium,
@@ -319,6 +337,11 @@ export function DashboardShell({
   const [changingDay, setChangingDay] = useState(false);
   const [showAllSports, setShowAllSports] = useState(false);
   const [showAllReleases, setShowAllReleases] = useState(false);
+  const [showAllNews, setShowAllNews] = useState(false);
+  // A manual morning/evening choice lasts for this session; a new visit
+  // goes back to following the clock.
+  const [modeOverride, setModeOverride] = useState<DayMode | null>(null);
+  const [tomorrowPayload, setTomorrowPayload] = useState<BriefingPayload>();
   const [completedReminders, setCompletedReminders] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const nowMs = useNow(Date.parse(initialPayload.briefing.generatedAt));
@@ -351,6 +374,52 @@ export function DashboardShell({
   );
   const dayOffset = dayOffsetBetween(briefing.today, briefing.date);
   const isToday = dayOffset === 0;
+  const autoMode = dayModeAt(nowMs, timeZone);
+  const dayMode: DayMode = modeOverride ?? autoMode;
+  const showEvening = isToday && dayMode === "evening";
+  const tomorrowDate = shiftDateKey(briefing.today, 1);
+
+  useEffect(() => {
+    try {
+      const saved = window.sessionStorage.getItem(DAY_MODE_KEY);
+      // Deferred like the preferences above, so the first render matches the
+      // static HTML before session state is applied.
+      const timer = window.setTimeout(() => {
+        if (saved === "morning" || saved === "evening") setModeOverride(saved);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    } catch {
+      return undefined;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!showEvening) return;
+    let cancelled = false;
+    loadDay(tomorrowDate)
+      .then((loaded) => {
+        if (cancelled) return;
+        setTomorrowPayload(
+          localWeatherRef.current ? withLocalWeather(loaded, localWeatherRef.current) : loaded,
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [showEvening, tomorrowDate, loadDay]);
+
+  function toggleDayMode() {
+    const next: DayMode = dayMode === "evening" ? "morning" : "evening";
+    const override = next === autoMode ? null : next;
+    setModeOverride(override);
+    try {
+      if (override) window.sessionStorage.setItem(DAY_MODE_KEY, override);
+      else window.sessionStorage.removeItem(DAY_MODE_KEY);
+    } catch {
+      // Storage refused; the choice still holds until the page closes.
+    }
+  }
 
   const lastUpdated = useMemo(
     () =>
@@ -528,15 +597,43 @@ export function DashboardShell({
     notify("Prototype preferences reset");
   }
 
-  const visibleSports = showAllSports
-    ? sports
-    : sports.slice(0, SPORTS_PREVIEW_COUNT);
-  const hiddenSportsCount = Math.max(0, sports.length - visibleSports.length);
+  const sportsGroups = groupSports(sports, briefing.date, nowMs, timeZone);
+  const visibleUpcomingGames = showAllSports
+    ? sportsGroups.upcoming
+    : sportsGroups.upcoming.slice(0, UPCOMING_GAMES_PREVIEW);
+  const hiddenUpcomingCount = sportsGroups.upcoming.length - visibleUpcomingGames.length;
+  const sportsSummary = [
+    sportsGroups.results.length && `${sportsGroups.results.length} result${sportsGroups.results.length === 1 ? "" : "s"}`,
+    sportsGroups.today.length && `${sportsGroups.today.length} ${isToday ? "today" : "that day"}`,
+    sportsGroups.upcoming.length && `${sportsGroups.upcoming.length} coming up`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const releases = briefing.upcomingReleases?.items ?? [];
-  const visibleReleases = showAllReleases
-    ? releases
-    : releases.slice(0, RELEASES_PREVIEW_COUNT);
-  const hiddenReleasesCount = Math.max(0, releases.length - visibleReleases.length);
+  const releaseGroups = groupReleases(releases, briefing.date);
+  // Collapsed: a few per near-term group, and nothing from "Later".
+  const hiddenReleaseCount =
+    releaseGroups.later.length +
+    [releaseGroups.justOut, releaseGroups.today, releaseGroups.nextWeek].reduce(
+      (total, group) => total + Math.max(0, group.length - RELEASES_PER_GROUP),
+      0,
+    );
+  const dedupedHeadlines = dedupeHeadlines(headlines);
+  const laneHeadlines = (lane: string) => {
+    const inLane = dedupedHeadlines.filter((headline) => headline.lane === lane);
+    return showAllNews ? inLane : inLane.slice(0, HEADLINES_PER_LANE);
+  };
+  const hiddenHeadlineCount = ["world", "geek"].reduce(
+    (total, lane) =>
+      total +
+      Math.max(
+        0,
+        dedupedHeadlines.filter((headline) => headline.lane === lane).length - HEADLINES_PER_LANE,
+      ),
+    0,
+  );
+  const openReminderCount =
+    briefing.reminders?.items.filter((item) => !completedReminders.includes(item.id)).length ?? 0;
   const releaseHeadline = headlines.find((headline) => headline.lane === "events");
   const now = nowMs;
   const nextEvent =
@@ -544,7 +641,10 @@ export function DashboardShell({
       if (item.status === "cancelled") return false;
       if (item.time.mode === "all-day") return true;
       return new Date(item.time.end ?? item.time.start).getTime() >= now;
-    }) ?? agenda[0] ?? null;
+    }) ??
+    // Once today's last event is over, say so rather than showing it again;
+    // other days show their first event regardless of the time.
+    (isToday ? null : agenda[0] ?? null);
   const nextEventParts = nextEvent ? eventStartParts(nextEvent, timeZone) : null;
   const weatherRisk = agenda
     .map((item) => ({ item, forecast: eventForecast(item, hourlyWeather) }))
@@ -583,6 +683,90 @@ export function DashboardShell({
     const start = eventStartMs(item);
     return !Number.isNaN(start) && start > nowMs;
   });
+  const renderGame = (game: SportsItem) => (
+                    <article className="game-row" key={game.id}>
+                      <div className="team-logo">
+                        <Image
+                          src={game.logoPath}
+                          alt={`${game.team} logo`}
+                          width={42}
+                          height={42}
+                        />
+                      </div>
+                      <div className="game-copy">
+                        <h3>{game.title}</h3>
+                        <p className="game-result">
+                          {(game.state === "final"
+                            ? [
+                                preferences.hideScores
+                                  ? "Score hidden"
+                                  : game.scoreLabel,
+                                game.startsAt,
+                              ]
+                            : [game.startsAt]
+                          )
+                            .filter(Boolean)
+                            .join(" · ")}
+                          {game.broadcast && ` · ${game.broadcast}`}
+                        </p>
+                        {game.context && <p className="game-context">{game.context}</p>}
+                        {game.standingLabel && <span className="standing-label">{game.standingLabel}</span>}
+                      </div>
+                      <span className={`game-state game-state-${game.state}`}>
+                        {game.state === "scheduled" ? "Upcoming" : game.state === "final" ? "Final" : "Live"}
+                      </span>
+                    </article>);
+
+  const renderRelease = (release: ReleaseItem) => {
+                        const medium = releaseMedium[release.medium];
+                        const MediumIcon = medium.icon;
+                        const date = releaseDateParts(release.releasesOn);
+                        return (
+                          <li className="release-row" key={release.id}>
+                            <span className="release-date" aria-hidden="true">
+                              <small>{date.month}</small>
+                              <strong>{date.day}</strong>
+                            </span>
+                            <span
+                              className={`release-thumb release-thumb-${release.medium}`}
+                            >
+                              {release.posterUrl ? (
+                                <Image
+                                  src={release.posterUrl}
+                                  alt=""
+                                  width={32}
+                                  height={44}
+                                  unoptimized
+                                />
+                              ) : (
+                                <MediumIcon size={15} aria-hidden="true" />
+                              )}
+                            </span>
+                            <span className="release-copy">
+                              <strong>{release.title}</strong>
+                              <small>
+                                {[release.detail, release.by]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </small>
+                            </span>
+                            <span
+                              className={`release-medium release-medium-${release.medium}`}
+                            >
+                              {medium.label}
+                            </span>
+                            <button
+                              className="row-action"
+                              type="button"
+                              onClick={() => openSource(release.title, release.url)}
+                              aria-label={`Open ${release.title}, releasing ${date.month} ${date.day}`}
+                            >
+                              <ArrowUpRight size={16} />
+                            </button>
+                          </li>
+                        );
+  };
+
   const nowMarker = (
     <div className="schedule-now" role="separator" aria-label={`Current time, ${nowLabel}`}>
       <span className="schedule-now-time">{nowLabel}</span>
@@ -625,7 +809,11 @@ export function DashboardShell({
               <p className="date-line">{relativeDayLabel(dayOffset)}</p>
               <h1>{formattedDate}</h1>
               <p className="page-summary">
-                A focused view of what&rsquo;s happening and what&rsquo;s next.
+                {isToday
+                  ? `${greetingAt(nowMs, timeZone)}. ${
+                      showEvening ? "Here’s what tomorrow holds." : "Here’s your day."
+                    }`
+                  : "A focused view of what’s happening and what’s next."}
               </p>
               {briefing.quote && (
                 <figure className="day-quote">
@@ -634,13 +822,28 @@ export function DashboardShell({
                     {briefing.quote.author}
                     {briefing.quote.work && <cite>{briefing.quote.work}</cite>}
                     <span className="quote-attribution">
-                      Quote of the day · {briefing.quote.attribution}
+                      Quote of the day
                     </span>
                   </figcaption>
                 </figure>
               )}
             </div>
             <div className="header-actions">
+              {isToday && (
+                <button
+                  type="button"
+                  className="mode-toggle"
+                  onClick={toggleDayMode}
+                  aria-label={`Switch to ${dayMode === "evening" ? "morning" : "evening"} view`}
+                  title={modeOverride ? "Chosen for this visit" : "Follows the time of day"}
+                >
+                  {dayMode === "evening" ? <Moon size={15} /> : <Sun size={15} />}
+                  <span>
+                    {dayMode === "evening" ? "Evening" : "Morning"}
+                    {modeOverride ? "" : " · auto"}
+                  </span>
+                </button>
+              )}
               <div className="day-pager" role="group" aria-label="Change day">
                 <button
                   type="button"
@@ -680,6 +883,13 @@ export function DashboardShell({
           </header>
 
           <div className="dashboard-grid">
+            {showEvening && (
+              <TomorrowCard
+                tomorrow={tomorrowPayload?.briefing.date === tomorrowDate ? tomorrowPayload : undefined}
+                openReminders={openReminderCount}
+                timeZone={timeZone}
+              />
+            )}
             <section className="card next-card" aria-labelledby="next-title">
               <SectionHeading title={isToday ? "Up Next" : "First event"} />
               {nextEvent && nextEventParts ? (
@@ -709,7 +919,9 @@ export function DashboardShell({
               ) : (
                 <div className="next-event next-event-empty">
                   <div className="next-details">
-                    <h3 id="next-title">Your calendar is clear</h3>
+                    <h3 id="next-title">
+                      {isToday && agenda.length > 0 ? "That’s it for today" : "Your calendar is clear"}
+                    </h3>
                     <p>
                       {isToday
                         ? "No more scheduled events are available for today."
@@ -897,48 +1109,37 @@ export function DashboardShell({
               <section className="card sports-card" aria-labelledby="sports-title">
                 <SectionHeading
                   title="Sports watch"
-                  action={<span className="watch-count">15 followed</span>}
+                  action={<span className="watch-count">{sportsSummary || "15 followed"}</span>}
                 />
-                <div className="sports-list">
-                  {visibleSports.map((game) => (
-                    <article className="game-row" key={game.id}>
-                      <div className="team-logo">
-                        <Image
-                          src={game.logoPath}
-                          alt={`${game.team} logo`}
-                          width={42}
-                          height={42}
-                        />
-                      </div>
-                      <div className="game-copy">
-                        <h3>{game.title}</h3>
-                        <p className="game-result">
-                          {(game.state === "final"
-                            ? [
-                                preferences.hideScores
-                                  ? "Score hidden"
-                                  : game.scoreLabel,
-                                game.startsAt,
-                              ]
-                            : [game.startsAt]
-                          )
-                            .filter(Boolean)
-                            .join(" · ")}
-                          {game.broadcast && ` · ${game.broadcast}`}
-                        </p>
-                        {game.context && <p className="game-context">{game.context}</p>}
-                        {game.standingLabel && <span className="standing-label">{game.standingLabel}</span>}
-                      </div>
-                      <span className={`game-state game-state-${game.state}`}>
-                        {game.state === "scheduled" ? "Upcoming" : game.state === "final" ? "Final" : "Live"}
-                      </span>
-                    </article>
+                {[
+                  { id: "results", title: showEvening ? "Tonight’s results" : "Latest results", games: sportsGroups.results },
+                  { id: "today", title: isToday ? "Today" : "That day", games: sportsGroups.today },
+                ]
+                  .filter((group) => group.games.length > 0)
+                  .map((group) => (
+                    <div className="sports-group" key={group.id}>
+                      <h3 className="list-group-title">{group.title}</h3>
+                      <div className="sports-list">{group.games.map(renderGame)}</div>
+                    </div>
                   ))}
-                </div>
+                {sportsGroups.upcoming.length > 0 && (
+                  <div className="sports-group">
+                    <h3 className="list-group-title">Coming up</h3>
+                    <ul className="upcoming-games">
+                      {visibleUpcomingGames.map((game) => (
+                        <li key={game.id}>
+                          <Image src={game.logoPath} alt="" width={20} height={20} />
+                          <span>{game.title}</span>
+                          <time dateTime={game.occursAt}>{compactGameTime(game, timeZone)}</time>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className="sports-controls">
-                  {sports.length > SPORTS_PREVIEW_COUNT && (
+                  {(hiddenUpcomingCount > 0 || showAllSports) && (
                     <button type="button" onClick={() => setShowAllSports((value) => !value)}>
-                      {showAllSports ? "Show priority only" : `Show ${hiddenSportsCount} more updates`}
+                      {showAllSports ? "Show fewer games" : `Show ${hiddenUpcomingCount} more games`}
                       <ChevronRight size={14} className={showAllSports ? "chevron-up" : ""} />
                     </button>
                   )}
@@ -1013,63 +1214,34 @@ export function DashboardShell({
                   </p>
                 ) : (
                   <>
-                    <ol className="releases-list" id="releases-title">
-                      {visibleReleases.map((release) => {
-                        const medium = releaseMedium[release.medium];
-                        const MediumIcon = medium.icon;
-                        const date = releaseDateParts(release.releasesOn);
-                        return (
-                          <li className="release-row" key={release.id}>
-                            <span className="release-date" aria-hidden="true">
-                              <small>{date.month}</small>
-                              <strong>{date.day}</strong>
-                            </span>
-                            <span
-                              className={`release-thumb release-thumb-${release.medium}`}
-                            >
-                              {release.posterUrl ? (
-                                <Image
-                                  src={release.posterUrl}
-                                  alt=""
-                                  width={32}
-                                  height={44}
-                                  unoptimized
-                                />
-                              ) : (
-                                <MediumIcon size={15} aria-hidden="true" />
-                              )}
-                            </span>
-                            <span className="release-copy">
-                              <strong>{release.title}</strong>
-                              <small>
-                                {[release.detail, release.by]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </small>
-                            </span>
-                            <span
-                              className={`release-medium release-medium-${release.medium}`}
-                            >
-                              {medium.label}
-                            </span>
-                            <button
-                              className="row-action"
-                              type="button"
-                              onClick={() => openSource(release.title, release.url)}
-                              aria-label={`Open ${release.title}, releasing ${date.month} ${date.day}`}
-                            >
-                              <ArrowUpRight size={16} />
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ol>
+                    <div id="releases-title">
+                      {[
+                        { id: "just-out", title: "Just out", items: releaseGroups.justOut },
+                        { id: "today", title: isToday ? "Today" : "That day", items: releaseGroups.today },
+                        { id: "week", title: "Next 7 days", items: releaseGroups.nextWeek },
+                        ...(showAllReleases
+                          ? [{ id: "later", title: "Later", items: releaseGroups.later }]
+                          : []),
+                      ]
+                        .filter((group) => group.items.length > 0)
+                        .map((group) => (
+                          <div className="release-group" key={group.id}>
+                            <h3 className="list-group-title">{group.title}</h3>
+                            <ol className="releases-list">
+                              {(showAllReleases
+                                ? group.items
+                                : group.items.slice(0, RELEASES_PER_GROUP)
+                              ).map(renderRelease)}
+                            </ol>
+                          </div>
+                        ))}
+                    </div>
                     {briefing.upcomingReleases.warnings.length > 0 && (
                       <p className="release-warning">
                         {briefing.upcomingReleases.warnings.join(" ")}
                       </p>
                     )}
-                    {releases.length > RELEASES_PREVIEW_COUNT && (
+                    {hiddenReleaseCount > 0 && (
                       <div className="sports-controls">
                         <button
                           type="button"
@@ -1077,7 +1249,7 @@ export function DashboardShell({
                         >
                           {showAllReleases
                             ? "Show fewer"
-                            : `Show ${hiddenReleasesCount} more releases`}
+                            : `Show ${hiddenReleaseCount} more releases`}
                           <ChevronRight
                             size={14}
                             className={showAllReleases ? "chevron-up" : ""}
@@ -1175,7 +1347,7 @@ export function DashboardShell({
                       <div className="news-lane-title">
                         <h3>{lane.title}</h3>
                       </div>
-                      {headlines.filter((headline) => headline.lane === lane.id).map((headline) => (
+                      {laneHeadlines(lane.id).map((headline) => (
                         <article className="lane-headline" key={headline.id}>
                           <div>
                             <p className="headline-meta"><span>{headline.interestTag}</span> {headline.publisher} · {headline.publishedAt}</p>
@@ -1198,6 +1370,14 @@ export function DashboardShell({
                       ))}
                     </section>
                   ))}
+                  {(hiddenHeadlineCount > 0 || showAllNews) && (
+                    <div className="sports-controls">
+                      <button type="button" onClick={() => setShowAllNews((value) => !value)}>
+                        {showAllNews ? "Show top stories only" : `Show ${hiddenHeadlineCount} more headlines`}
+                        <ChevronRight size={14} className={showAllNews ? "chevron-up" : ""} />
+                      </button>
+                    </div>
+                  )}
                   {releaseHeadline && (
                     <section className="release-lane">
                       <div className="release-icon"><CalendarDays size={18} /></div>
