@@ -1,29 +1,16 @@
 "use client";
 
-import {
-  AlertTriangle,
-  CalendarClock,
-  Check,
-  CloudSun,
-  Gift,
-  Lightbulb,
-  ListChecks,
-  PartyPopper,
-  Plus,
-  Sparkles,
-  Trophy,
-  X,
-  type LucideIcon,
-} from "lucide-react";
+import { Check, Gift, Lightbulb, PartyPopper, Plus, X, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import type { DailyBrief, HeadsUpItem, OccasionItem, ReminderItem } from "@/lib/briefing-types";
+import { Badge, Card, EmptyState } from "@/components/ui";
+import type { HeadsUpItem, OccasionItem, ReminderItem } from "@/lib/briefing-types";
 import { HEADS_UP_PRIORITY } from "@/lib/heads-up";
 
 /**
- * Today-only cards that look ahead: the AI summary, "things you might have
- * forgotten", and occasions to prepare for. Dismissals and "gift sorted"
- * marks are kept on the device, like reminder ticks.
+ * Today-only cards that look ahead: "you might have forgotten" and occasions
+ * to prepare for. Dismissals and "gift sorted" marks are kept on the device,
+ * like reminder ticks, and every change can be undone.
  */
 
 /** Name of the one-action Shortcut that adds its text input to Reminders. */
@@ -34,21 +21,24 @@ const GIFT_WINDOW = { from: 1, to: 14 };
 
 const STORE_EVENT = "brief-stored-list";
 
+function readList(key: string): string[] {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(key) ?? "[]");
+    return Array.isArray(saved) ? saved.filter((item) => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * A string list in localStorage, applied after the first render to match the
- * static HTML. Cards sharing a key stay in step through STORE_EVENT.
+ * static HTML. Cards sharing a key stay in step through STORE_EVENT. Updates
+ * take a function of the stored list, so a later undo cannot clobber it.
  */
-function useStoredList(key: string): [string[], (next: string[]) => void] {
+function useStoredList(key: string): [string[], (change: (current: string[]) => string[]) => void] {
   const [items, setItems] = useState<string[]>([]);
   useEffect(() => {
-    function load() {
-      try {
-        const saved = JSON.parse(window.localStorage.getItem(key) ?? "[]");
-        if (Array.isArray(saved)) setItems(saved.filter((item) => typeof item === "string"));
-      } catch {
-        window.localStorage.removeItem(key);
-      }
-    }
+    const load = () => setItems(readList(key));
     function onStored(event: Event) {
       if ((event as CustomEvent<string>).detail === key) load();
     }
@@ -59,7 +49,8 @@ function useStoredList(key: string): [string[], (next: string[]) => void] {
       window.removeEventListener(STORE_EVENT, onStored);
     };
   }, [key]);
-  function update(next: string[]) {
+  function update(change: (current: string[]) => string[]) {
+    const next = change(readList(key));
     setItems(next);
     try {
       window.localStorage.setItem(key, JSON.stringify(next));
@@ -87,69 +78,18 @@ function addReminderUrl(text: string): string {
   return `shortcuts://run-shortcut?name=${encodeURIComponent(ADD_REMINDER_SHORTCUT)}&input=text&text=${encodeURIComponent(text)}`;
 }
 
-const briefIcon: Record<string, LucideIcon> = {
-  "Coming up": CalendarClock,
-  Reminders: ListChecks,
-  Weather: CloudSun,
-  "Heads-up": AlertTriangle,
-  Occasions: Gift,
-  Opportunity: Lightbulb,
-  Sports: Trophy,
-};
-
-export function DailyBriefCard({ brief, viewMode }: { brief: DailyBrief; viewMode: "morning" | "evening" }) {
-  return (
-    <section className="card brief-card" aria-labelledby="brief-title">
-      <div className="section-heading">
-        <h2 id="brief-title">
-          <Sparkles size={16} aria-hidden="true" />
-          {brief.mode === "evening" ? "Tomorrow at a glance" : "Your day at a glance"}
-        </h2>
-        {brief.mode !== viewMode && (
-          <span className="watch-count">
-            Written for the {brief.mode} view
-          </span>
-        )}
-      </div>
-      <BriefBody brief={brief} />
-    </section>
-  );
-}
-
-/** Claude's headline and points; shared with the evening Tomorrow card. */
-export function BriefBody({ brief }: { brief: DailyBrief }) {
-  return (
-    <>
-      <p className="brief-headline">{brief.headline}</p>
-      {brief.points.length > 0 && (
-        <ul className="brief-points">
-          {brief.points.map((point, index) => {
-            const Icon = briefIcon[point.label] ?? Sparkles;
-            return (
-              <li key={`${point.label}-${index}`}>
-                <Icon size={16} aria-hidden="true" />
-                <div>
-                  <small>{point.label}</small>
-                  <span>{point.text}</span>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      <p className="brief-note">Written by Claude from the facts on this page. Check anything important.</p>
-    </>
-  );
-}
+export type Notify = (message: string, undo?: () => void) => void;
 
 export function HeadsUpCard({
   items,
   occasions,
   reminders,
+  onNotify,
 }: {
   items: HeadsUpItem[];
   occasions: OccasionItem[];
   reminders: ReminderItem[];
+  onNotify: Notify;
 }) {
   const [dismissed, setDismissed] = useStoredList("brief-dismissed-heads-up");
   const [giftsSorted, setGiftsSorted] = useStoredList("brief-gifts-sorted");
@@ -187,46 +127,61 @@ export function HeadsUpCard({
     .slice(0, HEADS_UP_LIMIT);
   if (shown.length === 0) return null;
 
+  function dismiss(item: HeadsUpItem) {
+    setDismissed((current) => [...current, item.id]);
+    onNotify(`Dismissed “${item.title}”.`, () =>
+      setDismissed((current) => current.filter((id) => id !== item.id)),
+    );
+  }
+
+  function markGiftSorted(item: HeadsUpItem) {
+    const occasionId = item.id.replace(/^gift-/, "");
+    setGiftsSorted((current) => [...current, occasionId]);
+    onNotify("Marked the gift as sorted.", () =>
+      setGiftsSorted((current) => current.filter((id) => id !== occasionId)),
+    );
+  }
+
   return (
-    <section className="card heads-up-card" aria-labelledby="heads-up-title">
-      <div className="section-heading">
-        <h2 id="heads-up-title">
-          <Lightbulb size={16} aria-hidden="true" /> You might have forgotten
-        </h2>
-      </div>
-      <ul className="heads-up-list">
+    <Card
+      title="You might have forgotten"
+      icon={Lightbulb}
+      className="heads-up-card"
+      help={
+        <p>
+          Suggestions worked out from your calendar, weather and occasions: overlapping events, an
+          early start, a missing location, rain during plans, or a gift not yet sorted. They are
+          suggestions, not confirmed tasks. Dismissing one hides it on this device, and can be
+          undone.
+        </p>
+      }
+    >
+      <ul className="suggestion-list">
         {shown.map((item) => (
           <li key={item.id}>
-            <span className="suggestion-badge">Suggestion</span>
-            <strong>{item.title}</strong>
-            <span>{item.detail}</span>
-            <div className="heads-up-actions">
+            <Badge tone="warning">Suggestion</Badge>
+            <p className="suggestion-title">{item.title}</p>
+            <p className="suggestion-detail">{item.detail}</p>
+            <div className="suggestion-actions">
               {item.reminderText && apple && (
-                <a className="text-action" href={addReminderUrl(item.reminderText)}>
-                  <Plus size={13} /> Add to Reminders
+                <a className="button button-secondary" href={addReminderUrl(item.reminderText)}>
+                  <Plus size={16} aria-hidden="true" /> Add to Reminders
                 </a>
               )}
               {item.kind === "gift" && (
-                <button
-                  type="button"
-                  className="text-action"
-                  onClick={() => setGiftsSorted([...giftsSorted, item.id.replace(/^gift-/, "")])}
-                >
-                  <Check size={13} /> Gift sorted
+                <button type="button" className="button button-secondary" onClick={() => markGiftSorted(item)}>
+                  <Check size={16} aria-hidden="true" /> Gift sorted
                 </button>
               )}
-              <button
-                type="button"
-                className="text-action"
-                onClick={() => setDismissed([...dismissed, item.id])}
-              >
-                <X size={13} /> Dismiss
+              <button type="button" className="button button-ghost" onClick={() => dismiss(item)}>
+                <X size={16} aria-hidden="true" /> Dismiss
+                <span className="visually-hidden">: {item.title}</span>
               </button>
             </div>
           </li>
         ))}
       </ul>
-    </section>
+    </Card>
   );
 }
 
@@ -238,57 +193,62 @@ const occasionIcon: Record<OccasionItem["kind"], LucideIcon> = {
 
 export function OccasionsCard({ occasions }: { occasions: OccasionItem[] }) {
   const [giftsSorted, setGiftsSorted] = useStoredList("brief-gifts-sorted");
-  if (occasions.length === 0) return null;
   return (
-    <section className="card occasions-card" aria-labelledby="occasions-title">
-      <div className="section-heading">
-        <h2 id="occasions-title">Occasions</h2>
-        <span className="watch-count">Next 3 weeks</span>
-      </div>
-      <ul className="occasions-list">
-        {occasions.map((occasion) => {
-          const Icon = occasionIcon[occasion.kind];
-          const sorted = giftsSorted.includes(occasion.id);
-          return (
-            <li key={occasion.id}>
-              <span className="occasion-when">
-                <strong>{occasion.offset === 0 ? "Today" : `${occasion.offset}d`}</strong>
-                <small>{occasion.dateLabel}</small>
-              </span>
-              <span className="occasion-copy">
-                <strong>
-                  <Icon size={13} aria-hidden="true" /> {occasion.name}
-                </strong>
-                <small>
-                  {[
-                    occasion.kind === "holiday" ? "Holiday" : occasion.kind === "anniversary" ? "Anniversary" : "Birthday",
-                    occasion.detail,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </small>
-              </span>
-              {occasion.giftable && (
-                <button
-                  type="button"
-                  className={`gift-toggle ${sorted ? "gift-sorted" : ""}`}
-                  aria-pressed={sorted}
-                  onClick={() =>
-                    setGiftsSorted(
-                      sorted
-                        ? giftsSorted.filter((id) => id !== occasion.id)
-                        : [...giftsSorted, occasion.id],
-                    )
-                  }
-                >
-                  {sorted ? <Check size={13} /> : <Gift size={13} />}
-                  {sorted ? "Sorted" : "Gift?"}
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+    <Card
+      title="Occasions"
+      icon={Gift}
+      className="occasions-card"
+      meta="Next three weeks"
+      help={
+        <p>
+          Family birthdays and anniversaries, and holidays, coming up in the next three weeks.
+          Mark a gift as sorted to stop the reminder suggestion; press again to undo.
+        </p>
+      }
+    >
+      {occasions.length === 0 ? (
+        <EmptyState icon={Gift} title="Nothing in the next three weeks" />
+      ) : (
+        <ul className="occasion-list">
+          {occasions.map((occasion) => {
+            const Icon = occasionIcon[occasion.kind];
+            const sorted = giftsSorted.includes(occasion.id);
+            const kind =
+              occasion.kind === "holiday" ? "Holiday" : occasion.kind === "anniversary" ? "Anniversary" : "Birthday";
+            return (
+              <li key={occasion.id}>
+                <p className="when">
+                  <span className="when-relative">
+                    {occasion.offset === 0 ? "Today" : occasion.offset === 1 ? "Tomorrow" : `In ${occasion.offset} days`}
+                  </span>
+                  <span className="when-date">{occasion.dateLabel}</span>
+                </p>
+                <Icon size={16} aria-hidden="true" className="people-icon" />
+                <div className="media-copy">
+                  <p className="media-title">{occasion.name}</p>
+                  <p className="media-detail">{[kind, occasion.detail].filter(Boolean).join(" · ")}</p>
+                </div>
+                {occasion.giftable && (
+                  <button
+                    type="button"
+                    className={`button button-toggle${sorted ? " is-on" : ""}`}
+                    aria-pressed={sorted}
+                    onClick={() =>
+                      setGiftsSorted((current) =>
+                        sorted ? current.filter((id) => id !== occasion.id) : [...current, occasion.id],
+                      )
+                    }
+                  >
+                    {sorted ? <Check size={16} aria-hidden="true" /> : <Gift size={16} aria-hidden="true" />}
+                    Gift sorted
+                    <span className="visually-hidden"> for {occasion.name}</span>
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
   );
 }

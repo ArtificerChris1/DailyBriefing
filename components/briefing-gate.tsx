@@ -1,7 +1,7 @@
 "use client";
 
 import { Fingerprint, KeyRound, Lock, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { DashboardShell } from "@/components/dashboard-shell";
 import type { BriefingPayload } from "@/lib/briefing-types";
@@ -19,6 +19,7 @@ import {
   unlockWithPassword,
 } from "@/lib/vault-client";
 import type { Keyring, PasskeyEntry, SealedDocument } from "@/lib/vault-format";
+import { readStoredPreferences } from "@/lib/preferences";
 
 /** The site may be served from a subpath, e.g. a GitHub Pages project URL. */
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -102,15 +103,15 @@ export function BriefingGate() {
 
   // The site rebuilds through the day. Coming back to the page picks up a
   // newer build straight away (the session key unlocks it again without a
-  // prompt); while it stays open, a banner offers the reload instead of
-  // swapping the page out mid-read.
+  // prompt) unless "Update automatically" is off (WCAG 3.2.5); while the page
+  // stays open, a banner offers the reload instead of swapping it mid-read.
   useEffect(() => {
     if (!isOpen || !BUILD_ID) return;
     async function check(reloadIfNewer: boolean) {
       try {
         const { buildId } = await fetchJson<{ buildId?: string }>("/build.json");
         if (!buildId || buildId === BUILD_ID) return;
-        if (reloadIfNewer) window.location.reload();
+        if (reloadIfNewer && readStoredPreferences().autoReload !== false) window.location.reload();
         else setUpdateReady(true);
       } catch {
         // Offline or mid-deploy; the next check will try again.
@@ -179,14 +180,19 @@ export function BriefingGate() {
     const { rawKey } = state;
     return (
       <>
-        {updateReady && (
-          <div className="update-banner" role="status">
-            <span>A newer briefing is ready.</span>
-            <button type="button" onClick={() => window.location.reload()}>
-              <RefreshCw size={14} /> Reload
-            </button>
-          </div>
-        )}
+        <div className="update-region" role="status">
+          {updateReady && (
+            <div className="update-banner">
+              <p>A newer briefing has been published.</p>
+              <button type="button" className="button button-primary" onClick={() => window.location.reload()}>
+                <RefreshCw size={16} aria-hidden="true" /> Load it now
+              </button>
+              <button type="button" className="button button-ghost" onClick={() => setUpdateReady(false)}>
+                Not now
+              </button>
+            </div>
+          )}
+        </div>
         <DashboardShell
           initialPayload={state.payload}
           loadDay={loadForShell}
@@ -203,10 +209,16 @@ export function BriefingGate() {
   return (
     <main className="lock-screen">
       <div className="lock-card">
-        <span className="brand-mark" aria-hidden="true" />
+        <span className="brand-mark brand-mark-large" aria-hidden="true" />
         <h1>Daily Briefing</h1>
-        {state.status === "loading" && <p className="lock-note">Loading…</p>}
-        {state.status === "failed" && <p className="lock-error" role="alert">{state.message}</p>}
+        <div role="status">
+          {state.status === "loading" && <p className="lock-note">Loading your briefing…</p>}
+        </div>
+        {state.status === "failed" && (
+          <p className="field-error" role="alert">
+            {state.message} Check your connection, then reload the page.
+          </p>
+        )}
         {state.status === "locked" && <UnlockForm keyring={state.keyring} onUnlock={open} />}
       </div>
     </main>
@@ -224,6 +236,8 @@ function UnlockForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
+  const passwordId = useId();
+  const errorId = useId();
   const canUsePasskey = keyring.passkeys.length > 0 && passkeysSupported();
 
   async function attempt(unlock: () => Promise<Uint8Array<ArrayBuffer>>, failure: string) {
@@ -241,7 +255,10 @@ function UnlockForm({
     event.preventDefault();
     if (!keyring.password || !password) return;
     const entry = keyring.password;
-    void attempt(() => unlockWithPassword(entry, password), "That password is not right.").then(
+    void attempt(
+      () => unlockWithPassword(entry, password),
+      "That password didn\u2019t unlock the briefing. Check it and try again; passwords are case-sensitive.",
+    ).then(
       () => passwordRef.current?.select(),
     );
   }
@@ -252,7 +269,7 @@ function UnlockForm({
       {canUsePasskey && (
         <button
           type="button"
-          className="lock-primary"
+          className="button button-primary button-block"
           disabled={busy}
           onClick={() =>
             void attempt(
@@ -261,28 +278,39 @@ function UnlockForm({
             )
           }
         >
-          <Fingerprint size={18} /> Unlock with passkey
+          <Fingerprint size={18} aria-hidden="true" /> Unlock with passkey
         </button>
       )}
       {keyring.password && (
         <form className="lock-form" onSubmit={submitPassword}>
-          <label className="field-label">
+          <label className="field-label" htmlFor={passwordId}>
             Password
-            <input
-              ref={passwordRef}
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              disabled={busy}
-            />
           </label>
-          <button type="submit" className={canUsePasskey ? "lock-secondary" : "lock-primary"} disabled={busy || !password}>
-            <KeyRound size={16} /> {busy ? "Unlocking…" : "Unlock"}
+          <input
+            id={passwordId}
+            ref={passwordRef}
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            disabled={busy}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
+          />
+          <button
+            type="submit"
+            className={`button button-block ${canUsePasskey ? "button-secondary" : "button-primary"}`}
+            disabled={busy || !password}
+          >
+            <KeyRound size={17} aria-hidden="true" /> {busy ? "Unlocking…" : "Unlock with password"}
           </button>
         </form>
       )}
-      {error && <p className="lock-error" role="alert">{error}</p>}
+      {error && (
+        <p className="field-error" id={errorId} role="alert">
+          {error}
+        </p>
+      )}
     </>
   );
 }
@@ -300,6 +328,8 @@ function AccountSettings({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const entryText = entry ? JSON.stringify(entry, null, 2) : "";
+  const labelId = useId();
+  const entryId = useId();
   const editUrl = REPOSITORY
     ? `https://github.com/${REPOSITORY}/edit/main/data/passkeys.json`
     : undefined;
@@ -323,8 +353,8 @@ function AccountSettings({
   return (
     <section className="settings-section">
       <h3>Sign-in</h3>
-      <button type="button" className="secondary-action" onClick={onLock}>
-        <Lock size={15} /> Lock now
+      <button type="button" className="button button-secondary" onClick={onLock}>
+        <Lock size={16} aria-hidden="true" /> Lock now
       </button>
       {passkeysSupported() && (
         <>
@@ -333,21 +363,18 @@ function AccountSettings({
             this device. Passkeys saved to iCloud Keychain or Google Password Manager
             also work on your other devices.
           </p>
-          <label className="field-label">
-            Device name
-            <input
-              type="text"
-              placeholder="e.g. iPhone"
-              value={label}
-              onChange={(event) => setLabel(event.target.value)}
-            />
-          </label>
-          <button type="button" className="secondary-action" disabled={busy} onClick={() => void enrol()}>
-            <Fingerprint size={15} /> {busy ? "Waiting for the device…" : "Add a passkey"}
+          <div className="field">
+            <label className="field-label" htmlFor={labelId}>
+              Device name, for example “iPhone”
+            </label>
+            <input id={labelId} type="text" value={label} onChange={(event) => setLabel(event.target.value)} />
+          </div>
+          <button type="button" className="button button-secondary" disabled={busy} onClick={() => void enrol()}>
+            <Fingerprint size={16} aria-hidden="true" /> {busy ? "Waiting for the device…" : "Add a passkey"}
           </button>
         </>
       )}
-      {message && <p className="settings-help" role="alert">{message}</p>}
+      <div role="status">{message && <p className="settings-help">{message}</p>}</div>
       {entry && (
         <div className="passkey-entry">
           <p className="settings-help">
@@ -362,11 +389,14 @@ function AccountSettings({
             then commit. It works once the site rebuilds, in about four minutes. The entry
             is safe to publish: it is locked by the passkey itself.
           </p>
-          <textarea readOnly rows={8} value={entryText} onFocus={(event) => event.target.select()} />
+          <label className="field-label" htmlFor={entryId}>
+            Passkey entry
+          </label>
+          <textarea id={entryId} readOnly rows={8} value={entryText} onFocus={(event) => event.target.select()} />
           <button
             type="button"
-            className="secondary-action"
-            onClick={() => void navigator.clipboard?.writeText(entryText).then(() => setMessage("Copied."))}
+            className="button button-secondary"
+            onClick={() => void navigator.clipboard?.writeText(entryText).then(() => setMessage("Copied the entry."))}
           >
             Copy entry
           </button>

@@ -140,7 +140,7 @@ const teams: TeamDefinition[] = [
   {
     id: "134940",
     name: "Green Bay Packers",
-    logoPath: "https://www.thesportsdb.com/images/media/team/badge/uwbfw01784719173.png",
+    logoPath: "https://r2.thesportsdb.com/images/media/team/badge/uwbfw01784719173.png",
     league: "NFL",
     group: "wisconsin",
   },

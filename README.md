@@ -87,6 +87,12 @@ Private feed addresses live only in Git-ignored `.env.local` locally and in repo
 
 Sports and headline feeds need no private credentials. Brief uses TheSportsDB's documented free key against their v1 API unless `THESPORTSDB_API_KEY` is set, in which case team schedules come from the premium v2 API. It combines either with official MLB/NHL data and caches public results for 15 minutes. Headlines contain publisher-provided titles, dates, attribution, and canonical links—not copied article bodies.
 
+## Design and accessibility
+
+The interface is a dark-first design system in `app/globals.css`: colour, spacing, radius and type tokens for dark and light themes, a shared `Card` component in `components/ui.tsx`, and one file per card in `components/cards/`. New widgets should use `Card` so they inherit the layout, headings, help and states.
+
+It targets WCAG 2.2 AAA. See [Accessibility](docs/accessibility.md) for how each criterion is met, how it was tested, and what still needs a screen-reader pass.
+
 ## Quality checks
 
 ```powershell

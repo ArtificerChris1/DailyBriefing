@@ -1,251 +1,55 @@
 "use client";
 
-import Image from "next/image";
 import {
-  ArrowUpRight,
-  Bell,
-  BookOpen,
-  Cake,
-  CalendarDays,
-  Check,
   ChevronLeft,
   ChevronRight,
-  Cloud,
-  CloudRain,
-  CloudSun,
-  Clock,
-  Eye,
-  EyeOff,
-  FileText,
-  Film,
-  Heart,
   Link2,
-  MapPin,
   Moon,
-  Navigation,
-  Newspaper,
-  Pin,
-  PinOff,
   RefreshCw,
-  RotateCcw,
   Settings2,
-  ShieldCheck,
-  Sparkles,
-  Sun,
-  Trophy,
-  Tv,
-  Umbrella,
+  SunMedium,
+  Sunrise,
   X,
 } from "lucide-react";
-import {
-  Fragment,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
-import {
-  connectors,
-  newsInterests,
-  preferredNewsSources,
-  sportsWatchlist,
-} from "@/lib/demo-data";
-import type {
-  BriefingPayload,
-  CalendarItem,
-  ConnectionSummary,
-  ConnectorDefinition,
-  HourlyWeatherPoint,
-  ProviderId,
-  ReleaseItem,
-  ReleaseMedium,
-  SportsItem,
-  TrustZone,
-} from "@/lib/briefing-types";
-import {
-  MAX_DAY_OFFSET,
-  MIN_DAY_OFFSET,
-  dayOffsetBetween,
-  shiftDateKey,
-} from "@/lib/briefing-window";
-import {
-  compactGameTime,
-  dayModeAt,
-  dedupeHeadlines,
-  greetingAt,
-  groupReleases,
-  groupSports,
-  type DayMode,
-} from "@/lib/briefing-view";
-import { DailyBriefCard, HeadsUpCard, OccasionsCard } from "@/components/plan-ahead";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+
+import { BirthdaysCard } from "@/components/cards/birthdays";
+import { GlanceHero } from "@/components/cards/glance-hero";
+import { HotnessCard } from "@/components/cards/hotness";
+import { NewsCard } from "@/components/cards/news";
+import { PhotoCard } from "@/components/cards/photo";
+import { ReleasesCard } from "@/components/cards/releases";
+import { RemindersCard } from "@/components/cards/reminders";
+import { ScheduleCard } from "@/components/cards/schedule";
+import { SportsCard } from "@/components/cards/sports";
+import { UpNextCard } from "@/components/cards/up-next";
+import { WeatherCard } from "@/components/cards/weather";
+import { ConnectionsPanel, Panel, PreferencesPanel } from "@/components/panels";
+import { HeadsUpCard, OccasionsCard } from "@/components/plan-ahead";
 import { PrioritiesCard } from "@/components/priorities-card";
-import { TomorrowCard } from "@/components/tomorrow-card";
+import type { BriefingPayload, ReminderItem } from "@/lib/briefing-types";
+import { dayModeAt, greetingAt, type DayMode } from "@/lib/briefing-view";
+import { MAX_DAY_OFFSET, MIN_DAY_OFFSET, dayOffsetBetween, shiftDateKey } from "@/lib/briefing-window";
+import { longDateLabel, relativeDayLabel } from "@/lib/format";
+import { fetchLocalWeather, withLocalWeather, type LiveWeather } from "@/lib/live-weather";
 import {
-  dueLabel,
-  groupReminders,
-  topPriorities,
-  type CustomPriority,
-} from "@/lib/priorities";
-import {
-  fetchLocalWeather,
-  withLocalWeather,
-  type LiveWeather,
-} from "@/lib/live-weather";
+  PREFERENCES_KEY,
+  applyAppearance,
+  defaultPreferences,
+  readStoredPreferences,
+  type Preferences,
+} from "@/lib/preferences";
+import { topPriorities, groupReminders, type CustomPriority } from "@/lib/priorities";
 
 type Panel = "connections" | "preferences" | null;
+type ModeChoice = "auto" | DayMode;
 
 /**
  * Hides the Connections entry point in the top bar. The panel and everything
  * behind it stay in place; flip this back to true to surface it again.
  */
 const SHOW_CONNECTIONS_ENTRY = false;
-
-interface Preferences {
-  briefingTime: string;
-  timeZone: string;
-  emailDigest: boolean;
-  showReminders: boolean;
-  showPhoto: boolean;
-  showSports: boolean;
-  showNews: boolean;
-  weatherAlerts: boolean;
-  hideScores: boolean;
-}
-
-const defaultPreferences: Preferences = {
-  briefingTime: "07:00",
-  timeZone: "America/Chicago",
-  emailDigest: true,
-  showReminders: true,
-  showPhoto: true,
-  showSports: true,
-  showNews: true,
-  weatherAlerts: true,
-  hideScores: false,
-};
-
-const providerIcon: Record<ProviderId, typeof CalendarDays> = {
-  ical: CalendarDays,
-  "apple-calendar": CalendarDays,
-  "apple-shortcut": Bell,
-  weather: CloudSun,
-  sports: Trophy,
-  news: Newspaper,
-};
-
-function timeRange(item: CalendarItem, timeZone: string) {
-  if (item.time.mode === "all-day") return "All day";
-
-  const timeFormat = new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone,
-  });
-  const start = timeFormat.format(new Date(item.time.start));
-  const end = item.time.end ? timeFormat.format(new Date(item.time.end)) : null;
-  return end ? `${start}–${end}` : start;
-}
-
-function clockLabel(iso: string, timeZone: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone,
-  }).format(Date.parse(iso));
-}
-
-function relativeDayLabel(offset: number) {
-  if (offset === 0) return "Today";
-  if (offset === 1) return "Tomorrow";
-  if (offset === -1) return "Yesterday";
-  return offset > 0 ? `In ${offset} days` : `${-offset} days ago`;
-}
-
-function hourLabel(value: string, timeZone: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    timeZone,
-  }).format(new Date(value));
-}
-
-function eventStartParts(item: CalendarItem, timeZone: string) {
-  if (item.time.mode === "all-day") return { clock: "All", meridiem: "day" };
-  const parts = new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone,
-  }).formatToParts(new Date(item.time.start));
-  const hour = parts.find((part) => part.type === "hour")?.value ?? "";
-  const minute = parts.find((part) => part.type === "minute")?.value ?? "";
-  const meridiem = parts.find((part) => part.type === "dayPeriod")?.value ?? "";
-  return { clock: `${hour}:${minute}`, meridiem };
-}
-
-function WeatherGlyph({ condition, size = 17 }: { condition: string; size?: number }) {
-  if (
-    condition === "Drizzle" ||
-    condition === "Rain" ||
-    condition === "Showers" ||
-    condition === "Snow" ||
-    condition === "Thunderstorms"
-  ) {
-    return <CloudRain size={size} aria-hidden="true" />;
-  }
-  if (condition === "Clear") return <Sun size={size} aria-hidden="true" />;
-  if (condition === "Cloudy") return <Cloud size={size} aria-hidden="true" />;
-  return <CloudSun size={size} aria-hidden="true" />;
-}
-
-function eventForecast(item: CalendarItem, hourlyWeather: HourlyWeatherPoint[]) {
-  if (item.time.mode !== "timed") return null;
-  const eventStart = new Date(item.time.start).getTime();
-  const eventEnd = item.time.end
-    ? new Date(item.time.end).getTime()
-    : eventStart + 30 * 60 * 1000;
-  const overlapping = hourlyWeather.filter((point) => {
-    const forecastStart = new Date(point.startsAt).getTime();
-    return forecastStart < eventEnd && forecastStart + 60 * 60 * 1000 > eventStart;
-  });
-  if (!overlapping.length) return null;
-  return overlapping.reduce((worst, point) =>
-    point.precipitationChance > worst.precipitationChance ? point : worst,
-  );
-}
-
-/** Games shown before the "show more" fold. */
-/** Compact upcoming games shown before "Show more". */
-const UPCOMING_GAMES_PREVIEW = 5;
-/** Headlines per news lane before "Show more". */
-const HEADLINES_PER_LANE = 5;
 const DAY_MODE_KEY = "brief-day-mode";
-/** Releases per date group before "Show more". */
-const RELEASES_PER_GROUP = 4;
-
-const releaseMedium: Record<
-  ReleaseMedium,
-  { label: string; icon: typeof Film }
-> = {
-  movie: { label: "Film", icon: Film },
-  tv: { label: "TV", icon: Tv },
-  comic: { label: "Comic", icon: Sparkles },
-  book: { label: "Book", icon: BookOpen },
-};
-
-/**
- * Release dates are calendar days, not instants, so they are formatted from
- * their own parts. Passing `2026-08-11` through `new Date()` would read it as
- * UTC midnight and slide it to the 10th anywhere west of Greenwich.
- */
-function releaseDateParts(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  const label = new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    timeZone: "UTC",
-  }).format(Date.UTC(year, month - 1, day));
-  return { month: label, day: String(day) };
-}
-
 const CLOCK_TICK_MS = 30_000;
 
 /** Cached so getSnapshot stays referentially stable between ticks. */
@@ -266,68 +70,27 @@ function readClock() {
 }
 
 /**
- * Wall-clock time that advances on its own. On the server and through hydration
- * it reports the briefing's own timestamp, so the first paint matches the markup
- * it replaces; afterwards it follows the real clock.
+ * Wall-clock time that advances on its own. Before hydration it reports the
+ * briefing's own timestamp, so the first paint matches the static markup.
  */
 function useNow(serverNow: number) {
   return useSyncExternalStore(subscribeToClock, readClock, () => serverNow);
 }
 
-/** NaN for all-day events, which have no clock position on the schedule. */
-function eventStartMs(item: CalendarItem) {
-  return item.time.mode === "timed" ? Date.parse(item.time.start) : Number.NaN;
+interface Toast {
+  id: number;
+  message: string;
+  undo?: () => void;
 }
 
-function eventEndMs(item: CalendarItem) {
-  return item.time.mode === "timed"
-    ? Date.parse(item.time.end ?? item.time.start)
-    : Number.NaN;
-}
-
-function eventDuration(item: CalendarItem) {
-  if (item.time.mode !== "timed" || !item.time.end) return null;
-  const minutes = Math.max(
-    0,
-    Math.round(
-      (new Date(item.time.end).getTime() - new Date(item.time.start).getTime()) /
-        60_000,
-    ),
-  );
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
-  return remainder ? `${hours} hr ${remainder} min` : `${hours} hr`;
-}
-
-function connectionFor(
-  connections: ConnectionSummary[],
-  provider: ProviderId,
-) {
-  return connections.find((connection) => connection.provider === provider);
-}
-
-function SourceBadge({ zone, label }: { zone: TrustZone; label: string }) {
+/** The decorative mountains behind the header. Purely visual. */
+function HeaderScene() {
   return (
-    <span className={`source-badge source-${zone}`}>
-      <span className="source-dot" aria-hidden="true" />
-      {label}
-    </span>
-  );
-}
-
-function SectionHeading({
-  title,
-  action,
-}: {
-  title: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="section-heading">
-      <h2>{title}</h2>
-      {action}
-    </div>
+    <svg className="header-scene" viewBox="0 0 1200 260" preserveAspectRatio="xMaxYMax slice" aria-hidden="true" focusable="false">
+      <circle className="scene-moon" cx="1020" cy="64" r="20" />
+      <path className="scene-far" d="M0 220 L180 120 L300 170 L460 70 L620 160 L760 90 L900 150 L1040 60 L1200 140 L1200 260 L0 260 Z" />
+      <path className="scene-near" d="M0 250 L140 190 L260 220 L420 150 L560 210 L700 160 L860 215 L980 170 L1200 220 L1200 260 L0 260 Z" />
+    </svg>
   );
 }
 
@@ -350,17 +113,13 @@ export function DashboardShell({
 }) {
   const [payload, setPayload] = useState(initialPayload);
   const [panel, setPanel] = useState<Panel>(null);
-  const [preferences, setPreferences] =
-    useState<Preferences>({
-      ...defaultPreferences,
-      timeZone: initialPayload.briefing.timeZone,
-    });
+  const [preferences, setPreferences] = useState<Preferences>({
+    ...defaultPreferences,
+    timeZone: initialPayload.briefing.timeZone,
+  });
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [changingDay, setChangingDay] = useState(false);
-  const [showAllSports, setShowAllSports] = useState(false);
-  const [showAllReleases, setShowAllReleases] = useState(false);
-  const [showAllNews, setShowAllNews] = useState(false);
   // A manual morning/evening choice lasts for this session; a new visit
   // goes back to following the clock.
   const [modeOverride, setModeOverride] = useState<DayMode | null>(null);
@@ -371,35 +130,12 @@ export function DashboardShell({
   const [customPriorities, setCustomPriorities] = useState<CustomPriority[]>([]);
   /** Reminder id → the first day it shows again. */
   const [snoozedReminders, setSnoozedReminders] = useState<Record<string, string>>({});
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
   const nowMs = useNow(Date.parse(initialPayload.briefing.generatedAt));
   const localWeatherRef = useRef<LiveWeather | undefined>(undefined);
 
   const { briefing, connections } = payload;
-  const {
-    agenda,
-    headlines,
-    hourlyWeather,
-    sports,
-    weather,
-  } = briefing;
   const timeZone = preferences.timeZone || briefing.timeZone;
-  const icalConnection = connectionFor(connections, "ical");
-  const homeCalendarConnection = connectionFor(connections, "apple-calendar");
-  const reminderConnection = connectionFor(connections, "apple-shortcut");
-
-  // Rendered from the date key at midday UTC so the label always names the day
-  // being shown, independent of the viewer's own zone.
-  const formattedDate = useMemo(
-    () =>
-      new Intl.DateTimeFormat("en-US", {
-        weekday: "long",
-        month: "long",
-        day: "numeric",
-        timeZone: "UTC",
-      }).format(new Date(`${briefing.date}T12:00:00Z`)),
-    [briefing.date],
-  );
   const dayOffset = dayOffsetBetween(briefing.today, briefing.date);
   const isToday = dayOffset === 0;
   const autoMode = dayModeAt(nowMs, timeZone);
@@ -407,39 +143,33 @@ export function DashboardShell({
   const showEvening = isToday && dayMode === "evening";
   const tomorrowDate = shiftDateKey(briefing.today, 1);
 
+  const lastUpdated = useMemo(
+    () =>
+      new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone }).format(
+        Date.parse(briefing.generatedAt),
+      ),
+    [briefing.generatedAt, timeZone],
+  );
+
+  /** Status messages stay until dismissed or replaced (WCAG 2.2.3, no timing). */
+  function notify(message: string, undo?: () => void) {
+    setToast({ id: Date.now(), message, undo });
+  }
+
   useEffect(() => {
-    try {
-      const saved = window.sessionStorage.getItem(DAY_MODE_KEY);
-      // Deferred like the preferences above, so the first render matches the
-      // static HTML before session state is applied.
-      const timer = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = window.sessionStorage.getItem(DAY_MODE_KEY);
         if (saved === "morning" || saved === "evening") setModeOverride(saved);
-      }, 0);
-      return () => window.clearTimeout(timer);
-    } catch {
-      return undefined;
-    }
+      } catch {
+        // No session storage: follow the clock.
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
-  useEffect(() => {
-    if (!showEvening) return;
-    let cancelled = false;
-    loadDay(tomorrowDate)
-      .then((loaded) => {
-        if (cancelled) return;
-        setTomorrowPayload(
-          localWeatherRef.current ? withLocalWeather(loaded, localWeatherRef.current) : loaded,
-        );
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [showEvening, tomorrowDate, loadDay]);
-
-  function toggleDayMode() {
-    const next: DayMode = dayMode === "evening" ? "morning" : "evening";
-    const override = next === autoMode ? null : next;
+  function chooseMode(choice: ModeChoice) {
+    const override = choice === "auto" ? null : choice;
     setModeOverride(override);
     try {
       if (override) window.sessionStorage.setItem(DAY_MODE_KEY, override);
@@ -449,46 +179,25 @@ export function DashboardShell({
     }
   }
 
-  const lastUpdated = useMemo(
-    () =>
-      new Intl.DateTimeFormat("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        timeZone,
-      }).format(new Date(briefing.generatedAt)),
-    [briefing.generatedAt, timeZone],
-  );
+  useEffect(() => {
+    if (!showEvening) return;
+    let cancelled = false;
+    loadDay(tomorrowDate)
+      .then((loaded) => {
+        if (cancelled) return;
+        setTomorrowPayload(localWeatherRef.current ? withLocalWeather(loaded, localWeatherRef.current) : loaded);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [showEvening, tomorrowDate, loadDay]);
 
   useEffect(() => {
     const hydrateTimer = window.setTimeout(() => {
-      const savedPreferences = window.localStorage.getItem("brief-preferences");
-      const savedCompleted = window.localStorage.getItem("brief-completed-reminders");
-
-      if (savedPreferences) {
-        try {
-          const parsedPreferences = JSON.parse(savedPreferences) as Record<string, unknown>;
-          const supportedPreferences = Object.fromEntries(
-            Object.keys(defaultPreferences)
-              .filter((key) => key in parsedPreferences)
-              .map((key) => [key, parsedPreferences[key]]),
-          ) as Partial<Preferences>;
-          setPreferences({
-            ...defaultPreferences,
-            ...supportedPreferences,
-          });
-        } catch {
-          window.localStorage.removeItem("brief-preferences");
-        }
-      }
-
-      if (savedCompleted) {
-        try {
-          setCompletedReminders(JSON.parse(savedCompleted) as string[]);
-        } catch {
-          window.localStorage.removeItem("brief-completed-reminders");
-        }
-      }
+      setPreferences((current) => ({ ...current, ...readStoredPreferences() }));
       for (const [key, apply] of [
+        ["brief-completed-reminders", (value: unknown) => Array.isArray(value) && setCompletedReminders(value as string[])],
         ["brief-pinned-reminders", (value: unknown) => Array.isArray(value) && setPinnedReminders(value as string[])],
         ["brief-custom-priorities", (value: unknown) => Array.isArray(value) && setCustomPriorities(value as CustomPriority[])],
         ["brief-snoozed-reminders", (value: unknown) => value && typeof value === "object" && setSnoozedReminders(value as Record<string, string>)],
@@ -503,105 +212,69 @@ export function DashboardShell({
       }
       setPreferencesReady(true);
     }, 0);
-
     return () => window.clearTimeout(hydrateTimer);
   }, []);
 
   useEffect(() => {
     if (!preferencesReady) return;
-    window.localStorage.setItem("brief-preferences", JSON.stringify(preferences));
+    window.localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
+    applyAppearance(preferences);
+    if (preferences.theme !== "system") return;
+    const media = window.matchMedia("(prefers-color-scheme: light)");
+    const follow = () => applyAppearance(preferences);
+    media.addEventListener("change", follow);
+    return () => media.removeEventListener("change", follow);
   }, [preferences, preferencesReady]);
 
-  // Ticking a reminder off only hides it on this device until the Shortcut
-  // next runs; the site cannot write back to Apple Reminders.
   useEffect(() => {
     if (!preferencesReady) return;
-    window.localStorage.setItem(
-      "brief-completed-reminders",
-      JSON.stringify(completedReminders),
-    );
-  }, [completedReminders, preferencesReady]);
-
-  useEffect(() => {
-    if (!preferencesReady) return;
+    window.localStorage.setItem("brief-completed-reminders", JSON.stringify(completedReminders));
     window.localStorage.setItem("brief-pinned-reminders", JSON.stringify(pinnedReminders));
     window.localStorage.setItem("brief-custom-priorities", JSON.stringify(customPriorities));
     window.localStorage.setItem("brief-snoozed-reminders", JSON.stringify(snoozedReminders));
-  }, [pinnedReminders, customPriorities, snoozedReminders, preferencesReady]);
+  }, [completedReminders, pinnedReminders, customPriorities, snoozedReminders, preferencesReady]);
 
   // The baked-in weather is for the configured location. Where the browser
   // allows it, fetch the forecast for wherever the viewer actually is.
   useEffect(() => {
     let disposed = false;
     if (!("geolocation" in navigator)) return;
-
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        const local = await fetchLocalWeather(
-          position.coords.latitude,
-          position.coords.longitude,
-        );
+        const local = await fetchLocalWeather(position.coords.latitude, position.coords.longitude);
         if (disposed) return;
         if (!local) {
-          setToast("Current-location weather could not be loaded");
-          window.setTimeout(() => setToast(null), 3600);
+          notify("Weather for your current location could not be loaded, so the usual location is shown.");
           return;
         }
         localWeatherRef.current = local;
         setPayload((current) => withLocalWeather(current, local));
       },
-      () => {
-        setToast("Location permission was unavailable; using the configured weather location");
-        window.setTimeout(() => setToast(null), 4200);
-      },
+      () => undefined,
       { enableHighAccuracy: false, maximumAge: 5 * 60 * 1000, timeout: 10_000 },
     );
-
     return () => {
       disposed = true;
     };
   }, []);
 
-  useEffect(() => {
-    if (!panel) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [panel]);
-
-  function notify(message: string) {
-    setToast(message);
-    window.setTimeout(() => setToast(null), 3200);
-  }
-
-  function updatePreference<K extends keyof Preferences>(
-    key: K,
-    value: Preferences[K],
-  ) {
+  function updatePreference<K extends keyof Preferences>(key: K, value: Preferences[K]) {
     setPreferences((current) => ({ ...current, [key]: value }));
   }
 
-  /**
-   * Single request path, so refreshing and paging always agree on location.
-   * Each day is an encrypted static file written by the last scheduled build.
-   */
   async function loadBriefing(date: string): Promise<BriefingPayload> {
     const loaded = await loadDay(date);
-    return localWeatherRef.current
-      ? withLocalWeather(loaded, localWeatherRef.current)
-      : loaded;
+    return localWeatherRef.current ? withLocalWeather(loaded, localWeatherRef.current) : loaded;
   }
 
-  async function refreshBriefing(showNotification = true) {
+  async function refreshBriefing() {
     if (refreshing) return;
     setRefreshing(true);
     try {
       setPayload(await loadBriefing(briefing.date));
-      if (showNotification) notify("Briefing reloaded");
+      notify("Briefing reloaded.");
     } catch {
-      notify("Could not reload the briefing; the last one is still shown");
+      notify("The briefing could not be reloaded, so the last one is still shown. Check your connection and try again.");
     } finally {
       setRefreshing(false);
     }
@@ -613,26 +286,21 @@ export function DashboardShell({
     try {
       setPayload(await loadBriefing(date));
     } catch {
-      notify("That day could not be loaded; the current day is still shown");
+      notify("That day could not be loaded, so the current day is still shown. Try again in a moment.");
     } finally {
       setChangingDay(false);
     }
   }
 
-  function openSource(source: string, deepLink?: string) {
-    if (deepLink) {
-      window.open(deepLink, "_blank", "noopener,noreferrer");
-      return;
-    }
-    notify(`${source} will open here after the account is connected`);
-  }
-
   function toggleReminder(id: string) {
     setCompletedReminders((current) =>
-      current.includes(id)
-        ? current.filter((reminderId) => reminderId !== id)
-        : [...current, id],
+      current.includes(id) ? current.filter((reminderId) => reminderId !== id) : [...current, id],
     );
+  }
+
+  function completeFromPriorities(id: string) {
+    toggleReminder(id);
+    notify("Marked done on this device.", () => toggleReminder(id));
   }
 
   function togglePin(id: string) {
@@ -641,9 +309,15 @@ export function DashboardShell({
     );
   }
 
-  function snoozeReminder(id: string) {
-    setSnoozedReminders((current) => ({ ...current, [id]: shiftDateKey(briefing.today, 1) }));
-    notify("Hidden on this device until tomorrow");
+  function snoozeReminder(item: ReminderItem) {
+    setSnoozedReminders((current) => ({ ...current, [item.id]: shiftDateKey(briefing.today, 1) }));
+    notify(`Snoozed “${item.title}” until tomorrow on this device.`, () =>
+      setSnoozedReminders((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      }),
+    );
   }
 
   function addCustomPriority(title: string) {
@@ -651,1289 +325,317 @@ export function DashboardShell({
   }
 
   function removeCustomPriority(id: string) {
+    const removed = customPriorities.find((priority) => priority.id === id);
     setCustomPriorities((current) => current.filter((priority) => priority.id !== id));
+    if (removed) {
+      notify(`Removed “${removed.title}”.`, () =>
+        setCustomPriorities((current) => [...current, removed]),
+      );
+    }
   }
 
-  function resetDemo() {
+  function resetDevice() {
     setPreferences(defaultPreferences);
-    setShowAllSports(false);
-    setShowAllReleases(false);
     setCompletedReminders([]);
     setPinnedReminders([]);
     setCustomPriorities([]);
     setSnoozedReminders({});
-    window.localStorage.removeItem("brief-preferences");
-    window.localStorage.removeItem("brief-completed-reminders");
-    window.localStorage.removeItem("brief-pinned-reminders");
-    window.localStorage.removeItem("brief-custom-priorities");
-    window.localStorage.removeItem("brief-snoozed-reminders");
-    notify("Prototype preferences reset");
+    for (const key of [
+      PREFERENCES_KEY,
+      "brief-completed-reminders",
+      "brief-pinned-reminders",
+      "brief-custom-priorities",
+      "brief-snoozed-reminders",
+      "brief-dismissed-heads-up",
+      "brief-gifts-sorted",
+    ]) {
+      window.localStorage.removeItem(key);
+    }
+    notify("This device has been reset.");
   }
 
-  const sportsGroups = groupSports(sports, briefing.date, nowMs, timeZone);
-  const visibleUpcomingGames = showAllSports
-    ? sportsGroups.upcoming
-    : sportsGroups.upcoming.slice(0, UPCOMING_GAMES_PREVIEW);
-  const hiddenUpcomingCount = sportsGroups.upcoming.length - visibleUpcomingGames.length;
-  const sportsSummary = [
-    sportsGroups.results.length && `${sportsGroups.results.length} result${sportsGroups.results.length === 1 ? "" : "s"}`,
-    sportsGroups.today.length && `${sportsGroups.today.length} ${isToday ? "today" : "that day"}`,
-    sportsGroups.upcoming.length && `${sportsGroups.upcoming.length} coming up`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const releases = briefing.upcomingReleases?.items ?? [];
-  const releaseGroups = groupReleases(releases, briefing.date);
-  // Collapsed: a few per near-term group, and nothing from "Later".
-  const hiddenReleaseCount =
-    releaseGroups.later.length +
-    [releaseGroups.justOut, releaseGroups.today, releaseGroups.nextWeek].reduce(
-      (total, group) => total + Math.max(0, group.length - RELEASES_PER_GROUP),
-      0,
-    );
-  const dedupedHeadlines = dedupeHeadlines(headlines);
-  const laneHeadlines = (lane: string) => {
-    const inLane = dedupedHeadlines.filter((headline) => headline.lane === lane);
-    return showAllNews ? inLane : inLane.slice(0, HEADLINES_PER_LANE);
-  };
-  const hiddenHeadlineCount = ["world", "geek"].reduce(
-    (total, lane) =>
-      total +
-      Math.max(
-        0,
-        dedupedHeadlines.filter((headline) => headline.lane === lane).length - HEADLINES_PER_LANE,
-      ),
-    0,
-  );
   // Snoozed reminders stay hidden until the day they were snoozed to.
   const shownReminders = (briefing.reminders?.items ?? []).filter(
     (item) => !(snoozedReminders[item.id] && snoozedReminders[item.id] > briefing.today),
   );
-  const reminderGroups = groupReminders(shownReminders, briefing.today, timeZone);
-  const openReminderGroups = groupReminders(
-    shownReminders.filter((item) => !completedReminders.includes(item.id)),
-    briefing.today,
-    timeZone,
-  );
-  const openReminderCount = shownReminders.filter(
-    (item) => !completedReminders.includes(item.id),
-  ).length;
+  const openReminders = shownReminders.filter((item) => !completedReminders.includes(item.id));
   const priorities = topPriorities({
-    groups: openReminderGroups,
+    groups: groupReminders(openReminders, briefing.today, timeZone),
     pinned: pinnedReminders,
     custom: customPriorities,
     today: briefing.today,
     timeZone,
   });
-  const releaseHeadline = headlines.find((headline) => headline.lane === "events");
-  const now = nowMs;
-  const nextEvent =
-    agenda.find((item) => {
-      if (item.status === "cancelled" || item.hold) return false;
-      if (item.time.mode === "all-day") return true;
-      return new Date(item.time.end ?? item.time.start).getTime() >= now;
-    }) ??
-    // Once today's last event is over, say so rather than showing it again;
-    // other days show their first event regardless of the time.
-    (isToday ? null : agenda[0] ?? null);
-  const nextEventParts = nextEvent ? eventStartParts(nextEvent, timeZone) : null;
-  const weatherRisk = agenda
-    .map((item) => ({ item, forecast: eventForecast(item, hourlyWeather) }))
-    .find(({ forecast }) => (forecast?.precipitationChance ?? 0) >= 50);
-  const peakPrecipitation = hourlyWeather.reduce<HourlyWeatherPoint | null>(
-    (peak, point) =>
-      !peak || point.precipitationChance > peak.precipitationChance ? point : peak,
-    null,
-  );
 
-  const nowLabel = useMemo(
-    () =>
-      new Intl.DateTimeFormat("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        timeZone,
-      }).format(nowMs),
-    [nowMs, timeZone],
-  );
-  // A tab left open past midnight still shows yesterday's agenda; marking "now"
-  // on it would be a lie, so the indicator only appears on the day it describes.
-  const showNowMarker = useMemo(
-    () =>
-      agenda.length > 0 &&
-      new Intl.DateTimeFormat("en-CA", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        timeZone,
-      }).format(nowMs) === briefing.date,
-    [agenda.length, briefing.date, nowMs, timeZone],
-  );
-  // The agenda is sorted by start, so the marker belongs above the first event
-  // yet to begin. -1 means the day's last event has already started.
-  const nowMarkerIndex = agenda.findIndex((item) => {
-    const start = eventStartMs(item);
-    return !Number.isNaN(start) && start > nowMs;
-  });
-  const renderGame = (game: SportsItem) => (
-                    <article className="game-row" key={game.id}>
-                      <div className="team-logo">
-                        <Image
-                          src={game.logoPath}
-                          alt={`${game.team} logo`}
-                          width={42}
-                          height={42}
-                        />
-                      </div>
-                      <div className="game-copy">
-                        <h3>{game.title}</h3>
-                        <p className="game-result">
-                          {(game.state === "final"
-                            ? [
-                                preferences.hideScores
-                                  ? "Score hidden"
-                                  : game.scoreLabel,
-                                game.startsAt,
-                              ]
-                            : [game.startsAt]
-                          )
-                            .filter(Boolean)
-                            .join(" · ")}
-                          {game.broadcast && ` · ${game.broadcast}`}
-                        </p>
-                        {game.context && <p className="game-context">{game.context}</p>}
-                        {game.standingLabel && <span className="standing-label">{game.standingLabel}</span>}
-                      </div>
-                      <span className={`game-state game-state-${game.state}`}>
-                        {game.state === "scheduled" ? "Upcoming" : game.state === "final" ? "Final" : "Live"}
-                      </span>
-                    </article>);
+  // The hero summary: a morning summary describes today, an evening one
+  // tomorrow. Show the one that fits the view, noting when it is older.
+  const brief = briefing.dailyBrief;
+  const heroBrief = showEvening ? (brief?.mode === "evening" ? brief : undefined) : brief;
+  const heroNote =
+    !showEvening && brief?.mode === "evening" ? "Written last night, looking ahead to today." : undefined;
 
-  const renderRelease = (release: ReleaseItem) => {
-                        const medium = releaseMedium[release.medium];
-                        const MediumIcon = medium.icon;
-                        const date = releaseDateParts(release.releasesOn);
-                        return (
-                          <li className="release-row" key={release.id}>
-                            <span className="release-date" aria-hidden="true">
-                              <small>{date.month}</small>
-                              <strong>{date.day}</strong>
-                            </span>
-                            <span
-                              className={`release-thumb release-thumb-${release.medium}`}
-                            >
-                              {release.posterUrl ? (
-                                <Image
-                                  src={release.posterUrl}
-                                  alt=""
-                                  width={32}
-                                  height={44}
-                                  unoptimized
-                                />
-                              ) : (
-                                <MediumIcon size={15} aria-hidden="true" />
-                              )}
-                            </span>
-                            <span className="release-copy">
-                              <strong>{release.title}</strong>
-                              <small>
-                                {[
-                                  // Generic labels give way to real availability.
-                                  release.availability &&
-                                  (release.detail === "Theatrical release" ||
-                                    release.detail === "Series premiere")
-                                    ? undefined
-                                    : release.detail,
-                                  release.by,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </small>
-                              {release.availability && (
-                                <small className="release-availability">{release.availability}</small>
-                              )}
-                            </span>
-                            <span
-                              className={`release-medium release-medium-${release.medium}`}
-                            >
-                              {medium.label}
-                            </span>
-                            <button
-                              className="row-action"
-                              type="button"
-                              onClick={() => openSource(release.title, release.url)}
-                              aria-label={`Open ${release.title}, releasing ${date.month} ${date.day}`}
-                            >
-                              <ArrowUpRight size={16} />
-                            </button>
-                          </li>
-                        );
-  };
-
-  const nowMarker = (
-    <div className="schedule-now" role="separator" aria-label={`Current time, ${nowLabel}`}>
-      <span className="schedule-now-time">{nowLabel}</span>
-      <span className="schedule-now-line" aria-hidden="true" />
-    </div>
-  );
+  const greeting = isToday
+    ? `${greetingAt(nowMs, timeZone)}. ${showEvening ? "Here’s what tomorrow holds." : "Here’s your day."}`
+    : "A look at another day.";
+  const modeChoice: ModeChoice = modeOverride ?? "auto";
 
   return (
-    <div className="app-shell">
-      <main className="main-content">
-        <header className="app-topbar">
-          <div className="topbar-content">
-            <span className="topbar-brand" aria-label="Daily Briefing">
-              <span className="brand-mark" aria-hidden="true" />
-              Daily Briefing
-            </span>
-            <div className="topbar-actions">
-              {SHOW_CONNECTIONS_ENTRY && (
-                <button type="button" onClick={() => setPanel("connections")}>
-                  <Link2 size={16} />
-                  <span>Connections</span>
-                  {(icalConnection?.state !== "connected" ||
-                    homeCalendarConnection?.state !== "connected" ||
-                    reminderConnection?.state !== "connected") && (
-                    <span className="setup-dot" aria-label="Setup needed" />
-                  )}
-                </button>
-              )}
-              <button type="button" onClick={() => setPanel("preferences")}>
-                <Settings2 size={16} />
-                <span>Preferences</span>
+    <div className="app">
+      <a className="skip-link" href="#main">
+        Skip to the briefing
+      </a>
+      <header className="topbar">
+        <div className="topbar-inner">
+          <p className="brand">
+            <span className="brand-mark" aria-hidden="true" />
+            Daily Briefing
+          </p>
+          <div className="topbar-actions">
+            {SHOW_CONNECTIONS_ENTRY && (
+              <button type="button" className="button button-secondary" onClick={() => setPanel("connections")}>
+                <Link2 size={17} aria-hidden="true" /> Connections
               </button>
-            </div>
+            )}
+            <button type="button" className="button button-secondary" onClick={() => setPanel("preferences")}>
+              <Settings2 size={17} aria-hidden="true" /> Preferences
+            </button>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <div className="page-frame">
-          <header className="page-header">
-            <div>
-              <p className="date-line">{relativeDayLabel(dayOffset)}</p>
-              <h1>{formattedDate}</h1>
-              <p className="page-summary">
-                {isToday
-                  ? `${greetingAt(nowMs, timeZone)}. ${
-                      showEvening ? "Here’s what tomorrow holds." : "Here’s your day."
-                    }`
-                  : "A focused view of what’s happening and what’s next."}
-              </p>
-              {briefing.quote && (
-                <figure className="day-quote">
-                  <blockquote>{briefing.quote.text}</blockquote>
-                  <figcaption>
-                    {briefing.quote.author}
-                    {briefing.quote.work && <cite>{briefing.quote.work}</cite>}
-                    <span className="quote-attribution">
-                      Quote of the day
-                    </span>
-                  </figcaption>
-                </figure>
-              )}
-            </div>
-            <div className="header-actions">
-              {isToday && (
-                <button
-                  type="button"
-                  className="mode-toggle"
-                  onClick={toggleDayMode}
-                  aria-label={`Switch to ${dayMode === "evening" ? "morning" : "evening"} view`}
-                  title={modeOverride ? "Chosen for this visit" : "Follows the time of day"}
-                >
-                  {dayMode === "evening" ? <Moon size={15} /> : <Sun size={15} />}
-                  <span>
-                    {dayMode === "evening" ? "Evening" : "Morning"}
-                    {modeOverride ? "" : " · auto"}
-                  </span>
-                </button>
-              )}
-              <div className="day-pager" role="group" aria-label="Change day">
-                <button
-                  type="button"
-                  onClick={() => void goToDay(shiftDateKey(briefing.date, -1))}
-                  disabled={changingDay || dayOffset <= MIN_DAY_OFFSET}
-                  aria-label="Previous day"
-                >
-                  <ChevronLeft size={17} />
-                </button>
-                <button
-                  type="button"
-                  className="day-pager-today"
-                  onClick={() => void goToDay(briefing.today)}
-                  disabled={changingDay || isToday}
-                >
-                  Today
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void goToDay(shiftDateKey(briefing.date, 1))}
-                  disabled={changingDay || dayOffset >= MAX_DAY_OFFSET}
-                  aria-label="Next day"
-                >
-                  <ChevronRight size={17} />
-                </button>
+      <main id="main" className="page" tabIndex={-1}>
+        <div className="page-header">
+          <HeaderScene />
+          <div className="page-title">
+            <p className="eyebrow">{relativeDayLabel(dayOffset)}</p>
+            <h1>{longDateLabel(briefing.date)}</h1>
+            <p className="greeting">{greeting}</p>
+          </div>
+          {briefing.quote && (
+            <figure className="quote">
+              <blockquote>
+                <p>{briefing.quote.text}</p>
+              </blockquote>
+              <figcaption>
+                {briefing.quote.author}
+                {briefing.quote.work && <cite>, {briefing.quote.work}</cite>}
+                <span className="quote-label"> · Quote of the day</span>
+              </figcaption>
+            </figure>
+          )}
+          <div className="page-controls">
+            {isToday && (
+              <div className="segmented" role="group" aria-label="View">
+                {(
+                  [
+                    { value: "auto", label: "Auto", detail: ` (${autoMode})`, icon: SunMedium },
+                    { value: "morning", label: "Morning", detail: "", icon: Sunrise },
+                    { value: "evening", label: "Evening", detail: "", icon: Moon },
+                  ] as const
+                ).map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={modeChoice === option.value}
+                    onClick={() => chooseMode(option.value)}
+                  >
+                    <option.icon size={16} aria-hidden="true" />
+                    {option.label}
+                    {option.detail && <span className="segmented-detail">{option.detail}</span>}
+                  </button>
+                ))}
               </div>
+            )}
+            <nav className="day-pager" aria-label="Day">
               <button
                 type="button"
-                className="refresh-button"
-                onClick={() => void refreshBriefing()}
-                disabled={refreshing}
+                className="icon-button"
+                onClick={() => void goToDay(shiftDateKey(briefing.date, -1))}
+                disabled={changingDay || dayOffset <= MIN_DAY_OFFSET}
               >
-                <RefreshCw size={17} className={refreshing ? "spin" : ""} />
-                <span>{refreshing ? "Refreshing" : `Updated ${lastUpdated}`}</span>
+                <ChevronLeft size={18} aria-hidden="true" />
+                <span className="visually-hidden">Previous day</span>
               </button>
-            </div>
-          </header>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => void goToDay(briefing.today)}
+                disabled={changingDay || isToday}
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => void goToDay(shiftDateKey(briefing.date, 1))}
+                disabled={changingDay || dayOffset >= MAX_DAY_OFFSET}
+              >
+                <ChevronRight size={18} aria-hidden="true" />
+                <span className="visually-hidden">Next day</span>
+              </button>
+            </nav>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => void refreshBriefing()}
+              aria-busy={refreshing}
+            >
+              <RefreshCw size={16} aria-hidden="true" className={refreshing ? "spin" : undefined} />
+              {refreshing ? "Reloading…" : `Updated ${lastUpdated}`}
+              <span className="visually-hidden">. Reload the briefing.</span>
+            </button>
+          </div>
+        </div>
 
-          <div className="dashboard-grid">
-            {isToday && !showEvening && briefing.dailyBrief && (
-              <DailyBriefCard brief={briefing.dailyBrief} viewMode={dayMode} />
-            )}
-            {showEvening && (
-              <TomorrowCard
-                tomorrow={tomorrowPayload?.briefing.date === tomorrowDate ? tomorrowPayload : undefined}
-                // A summary written for the morning would describe today, not tomorrow.
-                brief={briefing.dailyBrief?.mode === "evening" ? briefing.dailyBrief : undefined}
-                reminders={shownReminders.filter((item) => !completedReminders.includes(item.id))}
+        <div className="dashboard" aria-busy={changingDay}>
+          {isToday && (
+            <GlanceHero
+              mode={showEvening ? "tomorrow" : "today"}
+              day={
+                showEvening
+                  ? tomorrowPayload?.briefing.date === tomorrowDate
+                    ? tomorrowPayload.briefing
+                    : undefined
+                  : briefing
+              }
+              brief={heroBrief}
+              briefNote={heroNote}
+              reminders={openReminders}
+              occasions={briefing.occasions ?? []}
+              timeZone={timeZone}
+              nowMs={nowMs}
+            />
+          )}
+
+          {isToday && preferences.showReminders && briefing.reminders && (
+            <PrioritiesCard
+              title={showEvening ? "Carry forward" : "Top 3 today"}
+              entries={priorities}
+              onComplete={completeFromPriorities}
+              onRemoveCustom={removeCustomPriority}
+              onAddCustom={addCustomPriority}
+            />
+          )}
+
+          {isToday && (
+            <HeadsUpCard
+              items={briefing.headsUp ?? []}
+              occasions={briefing.occasions ?? []}
+              reminders={shownReminders}
+              onNotify={notify}
+            />
+          )}
+
+          <div className="row row-split">
+            <UpNextCard agenda={briefing.agenda} isToday={isToday} nowMs={nowMs} timeZone={timeZone} />
+            <WeatherCard
+              weather={briefing.weather}
+              hourly={briefing.hourlyWeather}
+              agenda={briefing.agenda}
+              outdoorWindow={briefing.outdoorWindow}
+              isToday={isToday}
+              nowMs={nowMs}
+              timeZone={timeZone}
+            />
+          </div>
+
+          <ScheduleCard
+            agenda={briefing.agenda}
+            hourly={briefing.hourlyWeather}
+            isToday={isToday}
+            nowMs={nowMs}
+            timeZone={timeZone}
+          />
+
+          <div className="row row-thirds">
+            {preferences.showReminders && briefing.reminders && (
+              <RemindersCard
+                reminders={shownReminders}
+                completed={completedReminders}
+                pinned={pinnedReminders}
                 today={briefing.today}
+                timeZone={timeZone}
+                onToggleComplete={toggleReminder}
+                onTogglePin={togglePin}
+                onSnooze={snoozeReminder}
+              />
+            )}
+            {preferences.showPhoto && isToday && (photoUrl || memoryUrls.some(Boolean)) && (
+              <PhotoCard
+                photo={briefing.photo}
+                photoUrl={photoUrl}
+                memories={briefing.memories}
+                memoryUrls={memoryUrls}
                 timeZone={timeZone}
               />
             )}
-            {isToday && preferences.showReminders && (
-              <PrioritiesCard
-                title={showEvening ? "Carry forward" : "Top 3 today"}
-                entries={priorities}
-                onComplete={toggleReminder}
-                onRemoveCustom={removeCustomPriority}
-                onAddCustom={addCustomPriority}
+            {preferences.showSports && briefing.sports.length > 0 && (
+              <SportsCard
+                sports={briefing.sports}
+                date={briefing.date}
+                isToday={isToday}
+                evening={showEvening}
+                hideScores={preferences.hideScores}
+                onToggleScores={() => updatePreference("hideScores", !preferences.hideScores)}
+                nowMs={nowMs}
+                timeZone={timeZone}
               />
-            )}
-            {isToday && (
-              <HeadsUpCard
-                items={briefing.headsUp ?? []}
-                occasions={briefing.occasions ?? []}
-                reminders={shownReminders}
-              />
-            )}
-            <section className="card next-card" aria-labelledby="next-title">
-              <SectionHeading title={isToday ? "Up Next" : "First event"} />
-              {nextEvent && nextEventParts ? (
-                <div className="next-event">
-                  <time
-                    className="next-time"
-                    dateTime={nextEvent.time.mode === "timed" ? nextEvent.time.start : undefined}
-                  >
-                    <span>{nextEventParts.clock}</span>
-                    <small>{nextEventParts.meridiem}</small>
-                  </time>
-                  <div className="next-details">
-                    <SourceBadge zone={nextEvent.zone} label={nextEvent.sourceLabel} />
-                    <h3 id="next-title">{nextEvent.title}</h3>
-                    <p>
-                      <MapPin size={16} />
-                      {nextEvent.locationLabel ?? "No location"}
-                      {eventDuration(nextEvent) && (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          {eventDuration(nextEvent)}
-                        </>
-                      )}
-                    </p>
-                    {nextEvent.departure && (
-                      <p className="leave-by">
-                        <Navigation size={14} aria-hidden="true" />
-                        Leave by {clockLabel(nextEvent.departure.leaveAt, timeZone)} ·{" "}
-                        {nextEvent.departure.travelMinutes} min drive, typical traffic
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="next-event next-event-empty">
-                  <div className="next-details">
-                    <h3 id="next-title">
-                      {isToday && agenda.length > 0 ? "That’s it for today" : "Your calendar is clear"}
-                    </h3>
-                    <p>
-                      {isToday
-                        ? "No more scheduled events are available for today."
-                        : "Nothing is scheduled on this day."}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </section>
-
-            <section className="card weather-card" aria-labelledby="weather-title">
-              <div className="weather-topline">
-                <span className="weather-location"><MapPin size={13} /> {weather.location}</span>
-              </div>
-              <div className="weather-main">
-                <WeatherGlyph condition={weather.condition} size={46} />
-                <div>
-                  <p className="temperature">{weather.temperature}°</p>
-                  <h2 id="weather-title">{weather.condition}</h2>
-                </div>
-              </div>
-              <div className="weather-stats">
-                <span><strong>H {weather.high}°</strong> / L {weather.low}°</span>
-                <span>
-                  <strong>Feels {weather.feelsLike}°</strong>
-                  {isToday ? " now" : " at peak"}
-                </span>
-                <span>
-                  <Umbrella size={14} /> {peakPrecipitation?.precipitationChance ?? weather.precipitationChance ?? 0}%
-                  {peakPrecipitation
-                    ? ` around ${hourLabel(peakPrecipitation.startsAt, timeZone)}`
-                    : isToday
-                      ? " today"
-                      : " that day"}
-                </span>
-              </div>
-              <p className="weather-note">
-                {weatherRisk
-                  ? `${weatherRisk.forecast?.condition ?? "Weather"} may affect ${weatherRisk.item.title}.`
-                  : briefing.outdoorWindow
-                    ? `Good time to be outside: ${clockLabel(briefing.outdoorWindow.from, timeZone)}–${clockLabel(briefing.outdoorWindow.to, timeZone)} (${briefing.outdoorWindow.summary}).`
-                    : "No significant weather overlap is forecast for your schedule."}
-              </p>
-              <details className="hourly-details weather-hourly-details">
-                <summary>View full hourly forecast <ChevronRight size={15} /></summary>
-                <div className="mobile-hourly-list">
-                  {hourlyWeather.map((point) => (
-                    <div className={point.precipitationChance >= 50 ? "mobile-hour mobile-hour-rain" : "mobile-hour"} key={point.id}>
-                      <time dateTime={point.startsAt}>{hourLabel(point.startsAt, timeZone)}</time>
-                      <WeatherGlyph condition={point.condition} />
-                      <strong>{point.temperature}°</strong>
-                      <span>{point.condition} · Feels {point.feelsLike}°</span>
-                      <small><Umbrella size={11} /> {point.precipitationChance}%</small>
-                    </div>
-                  ))}
-                </div>
-              </details>
-            </section>
-
-            <section className="card agenda-card dayline-card" aria-labelledby="agenda-title">
-              <SectionHeading
-                title="Daily Schedule"
-                action={<span className="forecast-freshness"><RefreshCw size={12} /> Forecast updated {lastUpdated}</span>}
-              />
-              <div className="schedule-list" aria-label="Calendar with weather for each event">
-                {agenda.length === 0 && (
-                  <div className="schedule-empty">
-                    <CalendarDays size={20} aria-hidden="true" />
-                    <div>
-                      <strong>No events on your work calendar today</strong>
-                      <span>Your hourly forecast is still available below.</span>
-                    </div>
-                  </div>
-                )}
-                {agenda.map((item, index) => {
-                  const forecast = eventForecast(item, hourlyWeather);
-                  const start = eventStartParts(item, timeZone);
-                  const end = eventEndMs(item);
-                  const isPast = showNowMarker && !Number.isNaN(end) && end < nowMs;
-                  return (
-                    <Fragment key={item.id}>
-                    {showNowMarker && index === nowMarkerIndex && nowMarker}
-                    <article
-                      className={`schedule-entry schedule-entry-${item.zone}${isPast ? " schedule-entry-past" : ""}`}
-                      aria-label={`${timeRange(item, timeZone)}, ${item.title}${isPast ? ", already finished" : ""}${forecast ? `, ${forecast.condition}, ${forecast.temperature} degrees, feels like ${forecast.feelsLike} degrees, ${forecast.precipitationChance} percent chance of precipitation` : ""}`}
-                    >
-                      <time className="schedule-entry-time" dateTime={item.time.mode === "timed" ? item.time.start : undefined}>
-                        <strong>{start.clock}</strong>
-                        <span>{start.meridiem}</span>
-                      </time>
-                      <div className="schedule-entry-copy">
-                        <div className="schedule-entry-context">
-                          <span className={`schedule-check check-${item.zone}`} aria-hidden="true"><Check size={12} /></span>
-                          <SourceBadge zone={item.zone} label={item.sourceLabel} />
-                        </div>
-                        <h3>{item.title}</h3>
-                        <p>
-                          <MapPin size={13} /> {item.locationLabel}
-                          {item.departure && (
-                            <span className="leave-by-chip">
-                              Leave {clockLabel(item.departure.leaveAt, timeZone)}
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                      {forecast && (
-                        <div className={`schedule-entry-weather ${forecast.precipitationChance >= 50 ? "schedule-weather-alert" : ""}`}>
-                          <WeatherGlyph condition={forecast.condition} size={24} />
-                          <div>
-                            <strong>{forecast.temperature}°</strong>
-                            <span>Feels like {forecast.feelsLike}°</span>
-                          </div>
-                          <small><Umbrella size={11} /> {forecast.precipitationChance}%</small>
-                        </div>
-                      )}
-                    </article>
-                    </Fragment>
-                  );
-                })}
-                {showNowMarker && nowMarkerIndex === -1 && nowMarker}
-              </div>
-            </section>
-
-            {preferences.showReminders && briefing.reminders && (
-              <section className="card reminders-card" aria-labelledby="reminders-title">
-                <SectionHeading
-                  title="Reminders"
-                  action={<span className="item-count">{openReminderCount}</span>}
-                />
-                {shownReminders.length === 0 ? (
-                  <p className="hotness-message" id="reminders-title">
-                    Nothing open in Apple Reminders.
-                  </p>
-                ) : (
-                  <div id="reminders-title">
-                    {[
-                      { id: "overdue", title: "Overdue · carried over", items: reminderGroups.overdue },
-                      { id: "today", title: "Today", items: reminderGroups.today },
-                      { id: "upcoming", title: "Upcoming", items: reminderGroups.upcoming },
-                      { id: "undated", title: "No due date", items: reminderGroups.undated },
-                    ]
-                      .filter((group) => group.items.length > 0)
-                      .map((group) => (
-                        <div className="reminder-group" key={group.id}>
-                          <h3 className="list-group-title">{group.title}</h3>
-                          <div className="reminder-list">
-                            {group.items.map((item) => {
-                              const isComplete = completedReminders.includes(item.id);
-                              const isPinned = pinnedReminders.includes(item.id);
-                              return (
-                                <div
-                                  className={`reminder-item ${isComplete ? "reminder-complete" : ""} ${group.id === "overdue" ? "reminder-overdue" : ""}`}
-                                  key={item.id}
-                                >
-                                  <label className="reminder-check">
-                                    <input
-                                      type="checkbox"
-                                      checked={isComplete}
-                                      onChange={() => toggleReminder(item.id)}
-                                    />
-                                    <span className="custom-check" aria-hidden="true"><Check size={13} /></span>
-                                    <span className="reminder-copy">
-                                      <strong>{item.title}</strong>
-                                      <small>
-                                        {dueLabel(item, briefing.today, timeZone)} · {item.listLabel}
-                                      </small>
-                                    </span>
-                                  </label>
-                                  <span className="reminder-actions">
-                                    <button
-                                      type="button"
-                                      className="row-action"
-                                      onClick={() => togglePin(item.id)}
-                                      aria-pressed={isPinned}
-                                      aria-label={isPinned ? `Unpin ${item.title}` : `Pin ${item.title} to the top 3`}
-                                      title={isPinned ? "Unpin" : "Pin to top 3"}
-                                    >
-                                      {isPinned ? <PinOff size={15} /> : <Pin size={15} />}
-                                    </button>
-                                    {!isComplete && (
-                                      <button
-                                        type="button"
-                                        className="row-action"
-                                        onClick={() => snoozeReminder(item.id)}
-                                        aria-label={`Snooze ${item.title} until tomorrow`}
-                                        title="Snooze until tomorrow"
-                                      >
-                                        <Clock size={15} />
-                                      </button>
-                                    )}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    <p className="reminder-note">
-                      Ticks, pins and snoozes are kept on this device; Apple Reminders updates when the Shortcut runs.
-                    </p>
-                  </div>
-                )}
-              </section>
-            )}
-
-            {preferences.showPhoto && isToday && (photoUrl || memoryUrls.some(Boolean)) && (
-              <section className="card photo-card" aria-labelledby="photo-title">
-                <SectionHeading
-                  title="Photo of the day"
-                  action={
-                    briefing.photo?.albumUrl ? (
-                      <a className="watch-count" href={briefing.photo.albumUrl} target="_blank" rel="noreferrer">
-                        Open {briefing.photo.albumName ?? "album"}
-                      </a>
-                    ) : (
-                      briefing.photo?.albumName && (
-                        <span className="watch-count">{briefing.photo.albumName}</span>
-                      )
-                    )
-                  }
-                />
-                {briefing.photo && photoUrl && (
-                  <figure className="photo-figure">
-                    <Image
-                      src={photoUrl}
-                      alt={briefing.photo.caption ?? "Photo of the day"}
-                      width={briefing.photo.width}
-                      height={briefing.photo.height}
-                      unoptimized
-                    />
-                    <figcaption id="photo-title">
-                      {briefing.photo.caption && <strong>{briefing.photo.caption}</strong>}
-                      {briefing.photo.takenAt && (
-                        <small>
-                          {new Intl.DateTimeFormat("en-US", {
-                            month: "long",
-                            day: "numeric",
-                            year: "numeric",
-                            timeZone,
-                          }).format(new Date(briefing.photo.takenAt))}
-                        </small>
-                      )}
-                    </figcaption>
-                  </figure>
-                )}
-                {briefing.memories && memoryUrls.some(Boolean) && (
-                  <div className="memories">
-                    <h3 className="list-group-title">On this day</h3>
-                    <ul>
-                      {briefing.memories.map((memory, index) =>
-                        memoryUrls[index] ? (
-                          <li key={memory.src}>
-                            <Image
-                              src={memoryUrls[index]!}
-                              alt={`Photo from ${memory.yearsAgo} year${memory.yearsAgo === 1 ? "" : "s"} ago`}
-                              width={memory.width}
-                              height={memory.height}
-                              unoptimized
-                            />
-                            <small>
-                              {memory.yearsAgo} year{memory.yearsAgo === 1 ? "" : "s"} ago
-                            </small>
-                          </li>
-                        ) : null,
-                      )}
-                    </ul>
-                  </div>
-                )}
-              </section>
-            )}
-
-            {preferences.showSports && sports.length > 0 && (
-              <section className="card sports-card" aria-labelledby="sports-title">
-                <SectionHeading
-                  title="Sports watch"
-                  action={<span className="watch-count">{sportsSummary || "15 followed"}</span>}
-                />
-                {[
-                  { id: "results", title: showEvening ? "Tonight’s results" : "Latest results", games: sportsGroups.results },
-                  { id: "today", title: isToday ? "Today" : "That day", games: sportsGroups.today },
-                ]
-                  .filter((group) => group.games.length > 0)
-                  .map((group) => (
-                    <div className="sports-group" key={group.id}>
-                      <h3 className="list-group-title">{group.title}</h3>
-                      <div className="sports-list">{group.games.map(renderGame)}</div>
-                    </div>
-                  ))}
-                {sportsGroups.upcoming.length > 0 && (
-                  <div className="sports-group">
-                    <h3 className="list-group-title">Coming up</h3>
-                    <ul className="upcoming-games">
-                      {visibleUpcomingGames.map((game) => (
-                        <li key={game.id}>
-                          <Image src={game.logoPath} alt="" width={20} height={20} />
-                          <span>{game.title}</span>
-                          <time dateTime={game.occursAt}>{compactGameTime(game, timeZone)}</time>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <div className="sports-controls">
-                  {(hiddenUpcomingCount > 0 || showAllSports) && (
-                    <button type="button" onClick={() => setShowAllSports((value) => !value)}>
-                      {showAllSports ? "Show fewer games" : `Show ${hiddenUpcomingCount} more games`}
-                      <ChevronRight size={14} className={showAllSports ? "chevron-up" : ""} />
-                    </button>
-                  )}
-                  <button type="button" onClick={() => updatePreference("hideScores", !preferences.hideScores)}>
-                    {preferences.hideScores ? <Eye size={13} /> : <EyeOff size={13} />}
-                    {preferences.hideScores ? "Show scores" : "Hide spoilers"}
-                  </button>
-                </div>
-              </section>
-            )}
-
-            {briefing.hotGames && (
-              <section className="card hotness-card" aria-labelledby="hotness-title">
-                <SectionHeading
-                  title="BGG Hotness"
-                  action={<span className="watch-count">{briefing.hotGames.attribution}</span>}
-                />
-                {briefing.hotGames.message ? (
-                  <p className="hotness-message" id="hotness-title">
-                    {briefing.hotGames.message}
-                  </p>
-                ) : (
-                  <ol className="hotness-list" id="hotness-title">
-                    {briefing.hotGames.items.map((game) => (
-                      <li className="hotness-row" key={game.id}>
-                        <span className="hotness-rank" aria-hidden="true">
-                          {game.rank}
-                          {game.isNew ? (
-                            <small className="rank-move rank-new">New</small>
-                          ) : game.movement ? (
-                            <small className={`rank-move ${game.movement > 0 ? "rank-up" : "rank-down"}`}>
-                              {game.movement > 0 ? "\u25b2" : "\u25bc"}
-                              {Math.abs(game.movement)}
-                            </small>
-                          ) : null}
-                        </span>
-                        <span className="hotness-thumb">
-                          {game.thumbnailUrl && (
-                            <Image
-                              src={game.thumbnailUrl}
-                              alt=""
-                              width={34}
-                              height={34}
-                              unoptimized
-                            />
-                          )}
-                        </span>
-                        <span className="hotness-copy">
-                          <strong>{game.name}</strong>
-                          {game.yearPublished && <small>{game.yearPublished}</small>}
-                        </span>
-                        <button
-                          className="row-action"
-                          type="button"
-                          onClick={() => openSource(game.name, game.url)}
-                          aria-label={`Open ${game.name} on BoardGameGeek`}
-                        >
-                          <ArrowUpRight size={16} />
-                        </button>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </section>
-            )}
-
-            {briefing.upcomingReleases && (
-              <section className="card releases-card" aria-labelledby="releases-title">
-                <SectionHeading
-                  title="Upcoming releases"
-                  action={
-                    <span className="watch-count">
-                      {briefing.upcomingReleases.attribution}
-                    </span>
-                  }
-                />
-                {briefing.upcomingReleases.message ? (
-                  <p className="hotness-message" id="releases-title">
-                    {briefing.upcomingReleases.message}
-                  </p>
-                ) : (
-                  <>
-                    <div id="releases-title">
-                      {[
-                        { id: "just-out", title: "Just out", items: releaseGroups.justOut },
-                        { id: "today", title: isToday ? "Today" : "That day", items: releaseGroups.today },
-                        { id: "week", title: "Next 7 days", items: releaseGroups.nextWeek },
-                        ...(showAllReleases
-                          ? [{ id: "later", title: "Later", items: releaseGroups.later }]
-                          : []),
-                      ]
-                        .filter((group) => group.items.length > 0)
-                        .map((group) => (
-                          <div className="release-group" key={group.id}>
-                            <h3 className="list-group-title">{group.title}</h3>
-                            <ol className="releases-list">
-                              {(showAllReleases
-                                ? group.items
-                                : group.items.slice(0, RELEASES_PER_GROUP)
-                              ).map(renderRelease)}
-                            </ol>
-                          </div>
-                        ))}
-                    </div>
-                    {briefing.upcomingReleases.warnings.length > 0 && (
-                      <p className="release-warning">
-                        {briefing.upcomingReleases.warnings.join(" ")}
-                      </p>
-                    )}
-                    {hiddenReleaseCount > 0 && (
-                      <div className="sports-controls">
-                        <button
-                          type="button"
-                          onClick={() => setShowAllReleases((value) => !value)}
-                        >
-                          {showAllReleases
-                            ? "Show fewer"
-                            : `Show ${hiddenReleaseCount} more releases`}
-                          <ChevronRight
-                            size={14}
-                            className={showAllReleases ? "chevron-up" : ""}
-                          />
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </section>
-            )}
-
-            {isToday && briefing.occasions && <OccasionsCard occasions={briefing.occasions} />}
-
-            {briefing.birthdays && (
-              <section className="card birthdays-card" aria-labelledby="birthdays-title">
-                <SectionHeading
-                  title="Birthdays &amp; anniversaries"
-                  action={
-                    <span className="watch-count">
-                      {dayOffset === 0 && briefing.birthdays.onDayCount > 0
-                        ? `${briefing.birthdays.onDayCount} today`
-                        : `${briefing.birthdays.items.length} nearby`}
-                    </span>
-                  }
-                />
-                {briefing.birthdays.items.length === 0 ? (
-                  <p className="hotness-message" id="birthdays-title">
-                    Nothing from the last three days or the coming week.
-                  </p>
-                ) : (
-                  <ul className="birthday-list" id="birthdays-title">
-                    {briefing.birthdays.items.map((person) => {
-                      // The window follows the pager, so restate each offset
-                      // against the real today before labelling it.
-                      const offset = dayOffset + person.offset;
-                      const OccasionIcon =
-                        person.kind === "anniversary" ? Heart : Cake;
-                      const rowClass = [
-                        "birthday-row",
-                        offset === 0 && !person.inMemoriam
-                          ? "birthday-row-today"
-                          : "",
-                        person.inMemoriam ? "birthday-row-memoriam" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ");
-                      return (
-                        <li className={rowClass} key={person.id}>
-                          <span className="birthday-when">
-                            <strong>{relativeDayLabel(offset)}</strong>
-                            <small>{person.dateLabel}</small>
-                          </span>
-                          <span className="birthday-mark" aria-hidden="true">
-                            <OccasionIcon size={15} />
-                          </span>
-                          <span className="birthday-copy">
-                            <strong>{person.name}</strong>
-                            {(person.detail || person.note) && (
-                              <small>
-                                {[person.detail, person.note]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </small>
-                            )}
-                          </span>
-                          {person.profileUrl && (
-                            <button
-                              className="row-action"
-                              type="button"
-                              onClick={() => openSource(person.name, person.profileUrl)}
-                              aria-label={`Open ${person.name} on Facebook`}
-                            >
-                              <ArrowUpRight size={16} />
-                            </button>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-            )}
-
-            {preferences.showNews && (
-              <section className="card news-card" aria-labelledby="news-title">
-                <SectionHeading
-                  title="News, on your wavelength"
-                  action={<span className="preferred-source">Al Jazeera preferred</span>}
-                />
-                <div className="news-lanes">
-                  {[
-                    { id: "world", title: "World headlines" },
-                    { id: "geek", title: "Geek culture" },
-                  ].map((lane) => (
-                    <section className="news-lane" key={lane.id}>
-                      <div className="news-lane-title">
-                        <h3>{lane.title}</h3>
-                      </div>
-                      {laneHeadlines(lane.id).map((headline) => (
-                        <article className="lane-headline" key={headline.id}>
-                          <div>
-                            <p className="headline-meta"><span>{headline.interestTag}</span> {headline.publisher} · {headline.publishedAt}</p>
-                            <h4>{headline.title}</h4>
-                            {headline.summary && <p className="headline-summary">{headline.summary}</p>}
-                          </div>
-                          <button
-                            className="row-action"
-                            type="button"
-                            onClick={() =>
-                              openSource(
-                                headline.publisher,
-                                headline.url !== "#" ? headline.url : headline.source.deepLink,
-                              )
-                            }
-                            aria-label={`Open headline from ${headline.publisher}`}
-                          >
-                            <ArrowUpRight size={16} />
-                          </button>
-                        </article>
-                      ))}
-                    </section>
-                  ))}
-                  {(hiddenHeadlineCount > 0 || showAllNews) && (
-                    <div className="sports-controls">
-                      <button type="button" onClick={() => setShowAllNews((value) => !value)}>
-                        {showAllNews ? "Show top stories only" : `Show ${hiddenHeadlineCount} more headlines`}
-                        <ChevronRight size={14} className={showAllNews ? "chevron-up" : ""} />
-                      </button>
-                    </div>
-                  )}
-                  {releaseHeadline && (
-                    <section className="release-lane">
-                      <div className="release-icon"><CalendarDays size={18} /></div>
-                      <div>
-                        <h3>{releaseHeadline.title}</h3>
-                        <p>Only confirmed first-party dates · Next 30 days</p>
-                      </div>
-                      <button
-                        type="button"
-                        className="text-action"
-                        onClick={() => openSource(releaseHeadline.publisher, releaseHeadline.url)}
-                      >
-                        Preview calendar <ChevronRight size={14} />
-                      </button>
-                    </section>
-                  )}
-                </div>
-              </section>
             )}
           </div>
 
+          <div className="row row-halves">
+            {briefing.upcomingReleases && (
+              <ReleasesCard panel={briefing.upcomingReleases} date={briefing.date} isToday={isToday} />
+            )}
+            {briefing.hotGames && <HotnessCard panel={briefing.hotGames} />}
+          </div>
+
+          <div className="row row-halves">
+            {isToday && briefing.occasions && <OccasionsCard occasions={briefing.occasions} />}
+            {briefing.birthdays && <BirthdaysCard panel={briefing.birthdays} dayOffset={dayOffset} />}
+          </div>
+
+          {preferences.showNews && briefing.headlines.length > 0 && <NewsCard headlines={briefing.headlines} />}
         </div>
       </main>
 
-      {panel && (
-        <>
-          <button className="panel-backdrop" type="button" aria-label="Close panel" onClick={() => setPanel(null)} />
-          <aside className="slide-panel" role="dialog" aria-modal="true" aria-labelledby="panel-title">
-            <div className="panel-header">
-              <div>
-                <h2 id="panel-title">{panel === "connections" ? "Connections" : "Preferences"}</h2>
-              </div>
-              <button className="icon-button" type="button" onClick={() => setPanel(null)} aria-label="Close panel"><X size={20} /></button>
-            </div>
-
-            {panel === "connections" ? (
-              <ConnectionsPanel
-                connections={connections}
-                onNotify={notify}
-              />
-            ) : (
-              <PreferencesPanel
-                preferences={preferences}
-                updatePreference={updatePreference}
-                onReset={resetDemo}
-                accountSettings={accountSettings}
-              />
-            )}
-          </aside>
-        </>
+      <Panel title="Preferences" open={panel === "preferences"} onClose={() => setPanel(null)}>
+        <PreferencesPanel
+          preferences={preferences}
+          updatePreference={updatePreference}
+          onReset={resetDevice}
+          accountSettings={accountSettings}
+        />
+      </Panel>
+      {SHOW_CONNECTIONS_ENTRY && (
+        <Panel title="Connections" open={panel === "connections"} onClose={() => setPanel(null)}>
+          <ConnectionsPanel connections={connections} onNotify={notify} />
+        </Panel>
       )}
 
-      {toast && <div className="toast" role="status"><Check size={16} /> {toast}</div>}
-    </div>
-  );
-}
-
-function ConnectionsPanel({
-  connections,
-  onNotify,
-}: {
-  connections: ConnectionSummary[];
-  onNotify: (message: string) => void;
-}) {
-  const icalConnection = connectionFor(connections, "ical");
-  return (
-    <div className="panel-body">
-      <div className="panel-notice">
-        <FileText size={18} />
-        <p>
-          <strong>
-            {icalConnection?.state === "connected"
-              ? "Your work calendar is connected."
-              : "Your iCal connection is ready to configure."}
-          </strong>{" "}
-          {icalConnection?.state === "connected"
-            ? `Calendar events are syncing${icalConnection.accountLabel ? ` from ${icalConnection.accountLabel}` : ""}.`
-            : "Add your private iCal subscription URL to .env.local."}
-        </p>
-      </div>
-      <div className="trust-legend">
-        <span><span className="legend-dot legend-work" /> Work vault</span>
-        <span><span className="legend-dot legend-personal" /> Personal vault</span>
-        <span><span className="legend-dot legend-public" /> Public feed</span>
-      </div>
-      <div className="connector-list">
-        {connectors.map((connector) => {
-          const connection = connectionFor(connections, connector.id);
-          return (
-            <ConnectorCard
-              connector={connector}
-              connection={connection}
-              key={connector.id}
-              onNotify={onNotify}
-            />
-          );
-        })}
-      </div>
-      <div className="security-note">
-        <ShieldCheck size={18} />
-        <div>
-          <strong>Least access by default</strong>
-          <p>Daily Briefing reads the private iCal feed only while the site is built and never publishes the feed address or the raw calendar.</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConnectorCard({
-  connector,
-  connection,
-  onNotify,
-}: {
-  connector: ConnectorDefinition;
-  connection?: ConnectionSummary;
-  onNotify: (message: string) => void;
-}) {
-  const Icon = providerIcon[connector.id];
-  const state = connection?.state ?? connector.state;
-  const statusLabel =
-    state === "connected"
-      ? "Connected"
-      : state === "demo"
-      ? "Sample feed"
-      : state === "planned"
-        ? "Bridge planned"
-        : state === "not-configured"
-          ? "Setup required"
-          : state === "expired"
-            ? "Reconnect"
-        : state === "error"
-          ? "Needs attention"
-          : "Not connected";
-
-  function handleConnectorAction() {
-    if (connector.id === "apple-shortcut") {
-      onNotify(
-        state === "connected"
-          ? "Apple Reminders is supplying the Shortcut’s last snapshot"
-          : connection?.message ?? "Run the Apple Reminders Shortcut once",
-      );
-      return;
-    }
-
-    if (connector.id === "ical" || connector.id === "apple-calendar") {
-      const isHomeCalendar = connector.id === "apple-calendar";
-      if (state === "connected") {
-        onNotify(
-          isHomeCalendar
-            ? "The iCloud feed is supplying today’s home calendar"
-            : "The iCal feed is supplying today’s work calendar",
-        );
-      } else if (state === "not-configured") {
-        onNotify(
-          `Add ${isHomeCalendar ? "HOME" : "WORK"}_CALENDAR_ICAL_URL to .env.local, then restart Daily Briefing`,
-        );
-      } else {
-        onNotify(connection?.message ?? "The calendar feed could not be refreshed");
-      }
-      return;
-    }
-
-    onNotify(
-      state === "connected"
-        ? `${connector.name} is supplying live data`
-        : `${connector.name} remains on the integration roadmap`,
-    );
-  }
-
-  return (
-    <article className="connector-card">
-      <div className={`connector-icon connector-${connector.zone}`}><Icon size={21} /></div>
-      <div className="connector-main">
-        <div className="connector-title">
-          <h3>{connector.name}</h3>
-          <span className={`connector-state state-${state}`}>{statusLabel}</span>
-        </div>
-        <p>{connector.description}</p>
-        {connection?.accountLabel && <p className="connection-account">{connection.accountLabel}</p>}
-        {connection?.message && state === "error" && (
-          <p className="connection-message">{connection.message}</p>
-        )}
-        <div className="capability-list">
-          {connector.capabilities.map((capability) => <span key={capability}>{capability}</span>)}
-        </div>
-        <p className="permission-note"><ShieldCheck size={13} /> {connector.permissionNote}</p>
-        <button
-          type="button"
-          className="connector-action"
-          onClick={() => void handleConnectorAction()}
-        >
-          {connector.id === "ical" || connector.id === "apple-calendar"
-            ? state === "connected"
-              ? "Live feed active"
-              : "Configure iCal feed"
-            : state === "connected"
-              ? "Live data active"
-              : "View implementation note"}
-          <ChevronRight size={15} />
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function PreferencesPanel({
-  preferences,
-  updatePreference,
-  onReset,
-  accountSettings,
-}: {
-  preferences: Preferences;
-  updatePreference: <K extends keyof Preferences>(key: K, value: Preferences[K]) => void;
-  onReset: () => void;
-  accountSettings?: React.ReactNode;
-}) {
-  return (
-    <div className="panel-body preferences-body">
-      {accountSettings}
-      <section className="settings-section">
-        <h3>Delivery</h3>
-        <label className="field-label">
-          Morning briefing time
-          <input
-            type="time"
-            value={preferences.briefingTime}
-            onChange={(event) => updatePreference("briefingTime", event.target.value)}
-          />
-        </label>
-        <label className="field-label">
-          Time zone
-          <select
-            value={preferences.timeZone}
-            onChange={(event) => updatePreference("timeZone", event.target.value)}
-          >
-            <option value="America/Chicago">Central Time — Chicago</option>
-            <option value="America/New_York">Eastern Time — New York</option>
-            <option value="America/Denver">Mountain Time — Denver</option>
-            <option value="America/Los_Angeles">Pacific Time — Los Angeles</option>
-          </select>
-        </label>
-        <PreferenceToggle
-          label="Email digest"
-          description="Send a short, privacy-safe morning summary."
-          checked={preferences.emailDigest}
-          onChange={(checked) => updatePreference("emailDigest", checked)}
-        />
-      </section>
-
-      <section className="settings-section">
-        <h3>Sections</h3>
-        <PreferenceToggle label="Reminders" checked={preferences.showReminders} onChange={(checked) => updatePreference("showReminders", checked)} />
-        <PreferenceToggle label="Photo of the day" checked={preferences.showPhoto} onChange={(checked) => updatePreference("showPhoto", checked)} />
-        <PreferenceToggle label="Sports" checked={preferences.showSports} onChange={(checked) => updatePreference("showSports", checked)} />
-        <PreferenceToggle label="Headlines" checked={preferences.showNews} onChange={(checked) => updatePreference("showNews", checked)} />
-      </section>
-
-      <section className="settings-section">
-        <h3>Weather along your day</h3>
-        <PreferenceToggle
-          label="Event-aware weather alerts"
-          description="Flag rain, snow, heat, or wind only when it overlaps an event or travel window."
-          checked={preferences.weatherAlerts}
-          onChange={(checked) => updatePreference("weatherAlerts", checked)}
-        />
-        <p className="settings-help">The dashboard always aligns hourly conditions to calendar time; this controls extra alerts.</p>
-      </section>
-
-      <section className="settings-section interest-section">
-        <div className="settings-title-row">
-          <h3>Sports watchlist</h3>
-          <span>15 followed</span>
-        </div>
-        {sportsWatchlist.map((group) => (
-          <div className="watchlist-group" key={group.id}>
-            <strong>{group.label}</strong>
-            <div className="interest-chips">
-              {group.items.map((item) => <span key={item}>{item}</span>)}
-            </div>
-            {"note" in group && group.note && <small>{group.note}</small>}
+      <div className="toast-region" role="status">
+        {toast && (
+          <div className="toast" key={toast.id}>
+            <p>{toast.message}</p>
+            {toast.undo && (
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => {
+                  toast.undo?.();
+                  notify("Undone.");
+                }}
+              >
+                Undo
+              </button>
+            )}
+            <button type="button" className="icon-button" onClick={() => setToast(null)}>
+              <X size={18} aria-hidden="true" />
+              <span className="visually-hidden">Dismiss message</span>
+            </button>
           </div>
-        ))}
-        <PreferenceToggle
-          label="Hide scores until I reveal them"
-          checked={preferences.hideScores}
-          onChange={(checked) => updatePreference("hideScores", checked)}
-        />
-      </section>
-
-      <section className="settings-section interest-section">
-        <div className="settings-title-row">
-          <h3>News & geek interests</h3>
-          <span>{newsInterests.length} topics</span>
-        </div>
-        <div className="interest-chips interest-chips-accent">
-          {newsInterests.map((interest) => <span key={interest}>{interest}</span>)}
-        </div>
-        <div className="source-stack">
-          <strong>Preferred and trusted sources</strong>
-          <p>{preferredNewsSources.join(" · ")}</p>
-        </div>
-        <p>Official sources will drive release dates; rumors stay labeled and de-prioritized.</p>
-      </section>
-
-      <button className="reset-button" type="button" onClick={onReset}><RotateCcw size={16} /> Reset prototype preferences</button>
+        )}
+      </div>
     </div>
-  );
-}
-
-function PreferenceToggle({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string;
-  description?: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label className="setting-toggle">
-      <span><strong>{label}</strong>{description && <small>{description}</small>}</span>
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
-      <span className={`switch ${checked ? "switch-on" : ""}`} aria-hidden="true"><span /></span>
-    </label>
   );
 }

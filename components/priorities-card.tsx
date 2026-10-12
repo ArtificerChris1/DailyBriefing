@@ -1,14 +1,23 @@
 "use client";
 
-import { Check, Plus, Target, X } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { Check, CornerDownRight, Plus, Target, X } from "lucide-react";
+import { useId, useState, type FormEvent } from "react";
 
+import { Badge, Card, type Tone } from "@/components/ui";
 import type { PriorityEntry } from "@/lib/priorities";
 
+const reasonTone: Record<PriorityEntry["reason"], Tone> = {
+  Pinned: "accent",
+  "Your priority": "accent",
+  Overdue: "danger",
+  "Due today": "warning",
+  "Coming up": "neutral",
+};
+
 /**
- * The day's top three. Filled from pinned reminders and the viewer's own
- * priorities first, then whatever is overdue or due soonest; see
- * lib/priorities.ts.
+ * "Top 3 today", or "Carry forward" in the evening: pinned reminders and
+ * priorities typed in by hand, then whatever is overdue or due soonest; see
+ * lib/priorities.ts. Compact when there is nothing to show.
  */
 export function PrioritiesCard({
   title,
@@ -25,90 +34,99 @@ export function PrioritiesCard({
 }) {
   const [draft, setDraft] = useState("");
   const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const formId = useId();
+  const inputId = useId();
+  const errorId = useId();
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!draft.trim()) return;
+    if (!draft.trim()) {
+      setError("Type a priority first, for example “Call the plumber”.");
+      return;
+    }
     onAddCustom(draft.trim());
     setDraft("");
+    setError(null);
     setAdding(false);
   }
 
   return (
-    <section className="card priorities-card" aria-labelledby="priorities-title">
-      <div className="section-heading">
-        <h2 id="priorities-title">
-          <Target size={16} aria-hidden="true" /> {title}
-        </h2>
+    <Card
+      title={title}
+      icon={title === "Carry forward" ? CornerDownRight : Target}
+      className={`priorities-card${entries.length === 0 ? " is-compact" : ""}`}
+      meta={entries.length === 0 ? "Nothing pending. You’re caught up." : undefined}
+      actions={
         <button
           type="button"
-          className="text-action"
-          onClick={() => setAdding((value) => !value)}
+          className="button button-secondary"
           aria-expanded={adding}
+          aria-controls={formId}
+          onClick={() => setAdding((value) => !value)}
         >
-          <Plus size={14} /> Add
+          <Plus size={17} aria-hidden="true" /> Add<span className="hide-narrow"> priority</span>
+          <span className="visually-hidden show-narrow-sr"> priority</span>
         </button>
-      </div>
-      {adding && (
-        <form className="priority-form" onSubmit={submit}>
+      }
+      help={
+        <p>
+          Pinned reminders and priorities you add come first, then overdue reminders, then those
+          due soonest. Everything here is kept on this device. Marking a reminder done can be
+          undone from the Reminders card.
+        </p>
+      }
+    >
+      <form className="priority-form" id={formId} hidden={!adding} onSubmit={submit} noValidate>
+        <label htmlFor={inputId}>Your priority</label>
+        <div className="field-row">
           <input
+            id={inputId}
             type="text"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="What matters most today?"
             maxLength={120}
-            autoFocus
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
           />
-          <button type="submit" disabled={!draft.trim()}>
+          <button type="submit" className="button button-primary">
             Add
           </button>
-        </form>
-      )}
-      {entries.length === 0 ? (
-        <p className="priorities-empty">
-          Nothing pressing. Pin a reminder or add your own priority.
-        </p>
-      ) : (
-        <ol className="priorities-list">
+        </div>
+        {error && (
+          <p className="field-error" id={errorId} role="alert">
+            {error}
+          </p>
+        )}
+      </form>
+      {entries.length > 0 && (
+        <ol className="priority-list">
           {entries.map((entry, index) => (
             <li key={entry.id}>
               <span className="priority-rank" aria-hidden="true">
                 {index + 1}
               </span>
-              <span className="priority-copy">
-                <strong>{entry.title}</strong>
-                <small>
-                  <span className={`priority-reason priority-reason-${entry.reason.replace(/\s+/g, "-").toLowerCase()}`}>
-                    {entry.reason}
-                  </span>
-                  {entry.detail}
-                </small>
-              </span>
+              <div className="priority-copy">
+                <p className="priority-title">{entry.title}</p>
+                <p className="priority-detail">
+                  <Badge tone={reasonTone[entry.reason]}>{entry.reason}</Badge> {entry.detail}
+                </p>
+              </div>
               {entry.source === "reminder" ? (
-                <button
-                  type="button"
-                  className="row-action"
-                  onClick={() => onComplete(entry.id)}
-                  aria-label={`Mark ${entry.title} done on this device`}
-                  title="Done (on this device)"
-                >
-                  <Check size={16} />
+                <button type="button" className="icon-button" onClick={() => onComplete(entry.id)}>
+                  <Check size={18} aria-hidden="true" />
+                  <span className="visually-hidden">Mark {entry.title} done on this device</span>
                 </button>
               ) : (
-                <button
-                  type="button"
-                  className="row-action"
-                  onClick={() => onRemoveCustom(entry.id)}
-                  aria-label={`Remove ${entry.title}`}
-                  title="Remove"
-                >
-                  <X size={16} />
+                <button type="button" className="icon-button" onClick={() => onRemoveCustom(entry.id)}>
+                  <X size={18} aria-hidden="true" />
+                  <span className="visually-hidden">Remove {entry.title}</span>
                 </button>
               )}
             </li>
           ))}
         </ol>
       )}
-    </section>
+    </Card>
   );
 }
