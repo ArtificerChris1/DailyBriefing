@@ -335,6 +335,7 @@ export function DashboardShell({
   initialPayload,
   loadDay,
   photoUrl,
+  memoryUrls = [],
   accountSettings,
 }: {
   initialPayload: BriefingPayload;
@@ -342,6 +343,8 @@ export function DashboardShell({
   loadDay: (date: string) => Promise<BriefingPayload>;
   /** Decrypted photo of the day, as an object URL. */
   photoUrl?: string;
+  /** Decrypted "on this day" photos, aligned with `briefing.memories`. */
+  memoryUrls?: (string | undefined)[];
   /** Lock and passkey controls, shown at the top of Preferences. */
   accountSettings?: React.ReactNode;
 }) {
@@ -1241,38 +1244,69 @@ export function DashboardShell({
               </section>
             )}
 
-            {preferences.showPhoto && briefing.photo && photoUrl && (
+            {preferences.showPhoto && isToday && (photoUrl || memoryUrls.some(Boolean)) && (
               <section className="card photo-card" aria-labelledby="photo-title">
                 <SectionHeading
                   title="Photo of the day"
                   action={
-                    briefing.photo.albumName && (
-                      <span className="watch-count">{briefing.photo.albumName}</span>
+                    briefing.photo?.albumUrl ? (
+                      <a className="watch-count" href={briefing.photo.albumUrl} target="_blank" rel="noreferrer">
+                        Open {briefing.photo.albumName ?? "album"}
+                      </a>
+                    ) : (
+                      briefing.photo?.albumName && (
+                        <span className="watch-count">{briefing.photo.albumName}</span>
+                      )
                     )
                   }
                 />
-                <figure className="photo-figure">
-                  <Image
-                    src={photoUrl}
-                    alt={briefing.photo.caption ?? "Photo of the day"}
-                    width={briefing.photo.width}
-                    height={briefing.photo.height}
-                    unoptimized
-                  />
-                  <figcaption id="photo-title">
-                    {briefing.photo.caption && <strong>{briefing.photo.caption}</strong>}
-                    {briefing.photo.takenAt && (
-                      <small>
-                        {new Intl.DateTimeFormat("en-US", {
-                          month: "long",
-                          day: "numeric",
-                          year: "numeric",
-                          timeZone,
-                        }).format(new Date(briefing.photo.takenAt))}
-                      </small>
-                    )}
-                  </figcaption>
-                </figure>
+                {briefing.photo && photoUrl && (
+                  <figure className="photo-figure">
+                    <Image
+                      src={photoUrl}
+                      alt={briefing.photo.caption ?? "Photo of the day"}
+                      width={briefing.photo.width}
+                      height={briefing.photo.height}
+                      unoptimized
+                    />
+                    <figcaption id="photo-title">
+                      {briefing.photo.caption && <strong>{briefing.photo.caption}</strong>}
+                      {briefing.photo.takenAt && (
+                        <small>
+                          {new Intl.DateTimeFormat("en-US", {
+                            month: "long",
+                            day: "numeric",
+                            year: "numeric",
+                            timeZone,
+                          }).format(new Date(briefing.photo.takenAt))}
+                        </small>
+                      )}
+                    </figcaption>
+                  </figure>
+                )}
+                {briefing.memories && memoryUrls.some(Boolean) && (
+                  <div className="memories">
+                    <h3 className="list-group-title">On this day</h3>
+                    <ul>
+                      {briefing.memories.map((memory, index) =>
+                        memoryUrls[index] ? (
+                          <li key={memory.src}>
+                            <Image
+                              src={memoryUrls[index]!}
+                              alt={`Photo from ${memory.yearsAgo} year${memory.yearsAgo === 1 ? "" : "s"} ago`}
+                              width={memory.width}
+                              height={memory.height}
+                              unoptimized
+                            />
+                            <small>
+                              {memory.yearsAgo} year{memory.yearsAgo === 1 ? "" : "s"} ago
+                            </small>
+                          </li>
+                        ) : null,
+                      )}
+                    </ul>
+                  </div>
+                )}
               </section>
             )}
 
@@ -1338,6 +1372,14 @@ export function DashboardShell({
                       <li className="hotness-row" key={game.id}>
                         <span className="hotness-rank" aria-hidden="true">
                           {game.rank}
+                          {game.isNew ? (
+                            <small className="rank-move rank-new">New</small>
+                          ) : game.movement ? (
+                            <small className={`rank-move ${game.movement > 0 ? "rank-up" : "rank-down"}`}>
+                              {game.movement > 0 ? "\u25b2" : "\u25bc"}
+                              {Math.abs(game.movement)}
+                            </small>
+                          ) : null}
                         </span>
                         <span className="hotness-thumb">
                           {game.thumbnailUrl && (

@@ -77,6 +77,8 @@ One-time setup:
 
 GitHub Pages sites are public, so the build encrypts everything personal and the site asks for a password or passkey before decrypting it in the browser. See [Login setup](docs/login-setup.md). The repository and its history stay public; on GitHub's free plan, Pages requires that.
 
+Two data branches are written by the workflow and never deployed: `reminders-data` holds the encrypted Reminders snapshot, and `history-data` holds the last five weeks of the BGG hot list (public data, used for rank movement).
+
 GitHub disables scheduled workflows after 60 days without repository activity; re-enable it from the **Actions** tab if the briefing stops updating.
 
 ## Local data and security

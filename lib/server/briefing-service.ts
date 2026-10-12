@@ -32,10 +32,15 @@ import { fetchRssHeadlines } from "@/lib/providers/news/rss-headlines";
 import { fetchBggHotness } from "@/lib/providers/games/bgg-hotness";
 import { fetchQuoteOfTheDay } from "@/lib/providers/quotes/quote-of-the-day";
 import { fetchUpcomingReleases } from "@/lib/providers/releases/upcoming-releases";
-import { fetchPhotoOfDay } from "@/lib/providers/photos/icloud-shared-album";
+import {
+  fetchMemories,
+  fetchPhotoOfDay,
+  memoryPath,
+} from "@/lib/providers/photos/icloud-shared-album";
 import { fetchLiveSports } from "@/lib/providers/sports/live-sports";
 import { fetchOpenMeteoWeather } from "@/lib/providers/weather/open-meteo";
 import { recencyCutoff, withinRecencyWindow } from "@/lib/recency";
+import { withRankMovement } from "@/lib/server/bgg-history";
 import { getReminders } from "@/lib/server/reminders";
 import { todayExtras } from "@/lib/server/today-extras";
 import { withDepartures } from "@/lib/server/travel";
@@ -237,6 +242,7 @@ export async function getBriefingPayload(
     homeCalendarResult,
     reminderStatus,
     photoResult,
+    memoryResults,
     sportsResult,
     headlineResult,
     quoteResult,
@@ -248,6 +254,7 @@ export async function getBriefingPayload(
     getReminders(),
     // Only today has a photo; it is the one image the build publishes.
     date === today ? fetchPhotoOfDay(today) : Promise.resolve(undefined),
+    date === today ? fetchMemories(today, timeZone) : Promise.resolve([]),
     fetchLiveSports(timeZone),
     fetchRssHeadlines(),
     fetchQuoteOfTheDay(),
@@ -487,11 +494,14 @@ export async function getBriefingPayload(
       timeZone,
       mode: hasLiveSource ? (hasDemoSource ? "mixed" : "live") : "demo",
       quote: quoteResult.quote,
-      hotGames,
+      hotGames: hotGames && (await withRankMovement(hotGames, today)),
       // Local data, so it needs no fetch and never appears in `sources`.
       birthdays: birthdaysInWindow(date),
       reminders,
       photo: photoResult?.photo,
+      memories: memoryResults.length
+        ? memoryResults.map((result, index) => ({ ...result.memory, src: memoryPath(index) }))
+        : undefined,
       occasions: extras?.occasions,
       headsUp: extras?.headsUp,
       dailyBrief: extras?.dailyBrief,

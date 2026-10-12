@@ -145,6 +145,10 @@ export interface NewsItem extends BaseItem<"news"> {
 export interface HotGameItem {
   id: string;
   rank: number;
+  /** Places gained (positive) or lost since the previous day's list. */
+  movement?: number;
+  /** Not on the previous day's list. */
+  isNew?: boolean;
   name: string;
   yearPublished?: number;
   thumbnailUrl?: string;
@@ -274,6 +278,18 @@ export interface PhotoOfDay {
   caption?: string;
   takenAt?: string;
   albumName?: string;
+  /** The shared album's link, for "Open album"; safe because the page is encrypted. */
+  albumUrl?: string;
+}
+
+/** A photo taken on this date in an earlier year. */
+export interface PhotoMemory {
+  /** Site-relative path of the encrypted image the build writes. */
+  src: string;
+  width: number;
+  height: number;
+  takenAt: string;
+  yearsAgo: number;
 }
 
 /** A family occasion or holiday in the next three weeks; see lib/occasions.ts. */
@@ -332,6 +348,8 @@ export interface BriefingSnapshot {
   reminders?: RemindersPanel;
   /** Today's page only, and only when a shared album is configured. */
   photo?: PhotoOfDay;
+  /** Today's page only: photos from this date in earlier years. */
+  memories?: PhotoMemory[];
   /** Today's page only: occasions in the next three weeks. */
   occasions?: OccasionItem[];
   /** Today's page only: rule-based suggestions from the next few days. */

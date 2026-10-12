@@ -40,6 +40,8 @@ type GateState =
       /** Raw data key, kept to enrol passkeys; null when unencrypted. */
       rawKey: Uint8Array<ArrayBuffer> | null;
       photoUrl?: string;
+      /** Aligned with `briefing.memories`; undefined where one failed. */
+      memoryUrls: (string | undefined)[];
     };
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -58,20 +60,32 @@ async function loadDay(date: string, key: CryptoKey | null): Promise<BriefingPay
   );
 }
 
-async function loadPhoto(
-  payload: BriefingPayload,
+/** Fetches and decrypts one published image into an object URL. */
+async function loadImage(
+  src: string,
+  today: string,
   key: CryptoKey | null,
 ): Promise<string | undefined> {
-  const photo = payload.briefing.photo;
-  if (!photo) return undefined;
   try {
-    const response = await fetch(`${BASE_PATH}${photo.src}?d=${payload.briefing.today}`);
+    // The files are replaced each day under the same names; the date keeps a
+    // cached copy of yesterday's from being reused.
+    const response = await fetch(`${BASE_PATH}${src}?d=${today}`);
     if (!response.ok) return undefined;
     const bytes = await openBinary(await response.arrayBuffer(), key);
+    if (bytes.byteLength === 0) return undefined;
     return URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
   } catch {
     return undefined;
   }
+}
+
+async function loadPhotos(payload: BriefingPayload, key: CryptoKey | null) {
+  const { photo, memories = [], today } = payload.briefing;
+  const [photoUrl, ...memoryUrls] = await Promise.all([
+    photo ? loadImage(photo.src, today, key) : Promise.resolve(undefined),
+    ...memories.map((memory) => loadImage(memory.src, today, key)),
+  ]);
+  return { photoUrl, memoryUrls };
 }
 
 /**
@@ -117,7 +131,7 @@ export function BriefingGate() {
     const key = rawKey ? await importDataKey(rawKey) : null;
     const payload = await loadDay("today", key);
     if (rawKey) rememberDataKey(rawKey);
-    setState({ status: "open", payload, key, rawKey, photoUrl: await loadPhoto(payload, key) });
+    setState({ status: "open", payload, key, rawKey, ...(await loadPhotos(payload, key)) });
   }, []);
 
   useEffect(() => {
@@ -155,7 +169,9 @@ export function BriefingGate() {
 
   function lock() {
     forgetDataKey();
-    if (state.status === "open" && state.photoUrl) URL.revokeObjectURL(state.photoUrl);
+    if (state.status === "open") {
+      for (const url of [state.photoUrl, ...state.memoryUrls]) if (url) URL.revokeObjectURL(url);
+    }
     window.location.reload();
   }
 
@@ -175,6 +191,7 @@ export function BriefingGate() {
           initialPayload={state.payload}
           loadDay={loadForShell}
           photoUrl={state.photoUrl}
+          memoryUrls={state.memoryUrls}
           accountSettings={
             rawKey ? <AccountSettings rawKey={rawKey} onLock={lock} /> : undefined
           }

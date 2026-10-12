@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import type { PhotoOfDay } from "@/lib/briefing-types";
+import type { PhotoMemory, PhotoOfDay } from "@/lib/briefing-types";
 
 /**
  * Photo of the day from an iCloud shared album with public sharing on.
@@ -34,14 +34,21 @@ const CLOUDKIT_DATABASE = "database/1/com.apple.photos.cloud/production";
 /** Where the encrypted image is published; the route at this path writes it. */
 export const PHOTO_PATH = "/photo-of-the-day.bin";
 
-/** One photo the album offers, however its download URL is obtained. */
-interface Candidate {
-  id: string;
+interface Rendition {
   width: number;
   height: number;
+  url: () => Promise<string | undefined>;
+}
+
+/** One photo the album offers, however its download URLs are obtained. */
+interface Candidate {
+  id: string;
   caption?: string;
   takenAt?: string;
-  downloadUrl: () => Promise<string | undefined>;
+  /** About 2048 pixels on the long side, for the photo of the day. */
+  large: Rendition;
+  /** A thumbnail, for "on this day". */
+  small: Rendition;
 }
 
 interface Album {
@@ -52,6 +59,19 @@ interface Album {
 export interface PhotoOfDayResult {
   photo: PhotoOfDay;
   image: ArrayBuffer;
+}
+
+export interface MemoryResult {
+  memory: Omit<PhotoMemory, "src">;
+  image: ArrayBuffer;
+}
+
+/** Photos from this date in earlier years, at most this many. */
+export const MAX_MEMORIES = 3;
+
+/** Published as `/memories/0.bin`, `/memories/1.bin`, …, encrypted. */
+export function memoryPath(index: number): string {
+  return `/memories/${index}.bin`;
 }
 
 type AlbumLink =
@@ -114,24 +134,32 @@ function cloudKitCandidate(master: Record<string, unknown>): Candidate | undefin
   const itemType = text(field(fields, "itemType")) ?? "";
   if (/movie|mpeg|video|avi/i.test(itemType)) return undefined;
 
-  // The medium JPEG is 2048 pixels on the long side; tiny originals may lack one.
-  const prefix = field(fields, "resJPEGMedRes")
-    ? "resJPEGMed"
-    : text(field(fields, "resOriginalFileType")) === "public.jpeg"
-      ? "resOriginal"
-      : undefined;
-  if (!prefix) return undefined;
-  const downloadUrl = text(record(field(fields, `${prefix}Res`)).downloadURL);
-  const width = Number(field(fields, `${prefix}Width`));
-  const height = Number(field(fields, `${prefix}Height`));
   const id = text(master.recordName);
-  if (!downloadUrl || !id || !(width > 0) || !(height > 0)) return undefined;
+  const orientation = field(fields, "originalOrientation");
+  const rendition = (prefix: string): Rendition | undefined => {
+    const url = text(record(field(fields, `${prefix}Res`)).downloadURL);
+    const width = Number(field(fields, `${prefix}Width`));
+    const height = Number(field(fields, `${prefix}Height`));
+    if (!url || !(width > 0) || !(height > 0)) return undefined;
+    return {
+      ...orientedSize(width, height, orientation),
+      url: async () => url.replace("${f}", "photo.jpg"),
+    };
+  };
+  // The medium JPEG is 2048 pixels on the long side; tiny originals may lack
+  // one, and then a JPEG original stands in.
+  const large =
+    rendition("resJPEGMed") ??
+    (text(field(fields, "resOriginalFileType")) === "public.jpeg"
+      ? rendition("resOriginal")
+      : undefined);
+  if (!id || !large) return undefined;
 
   return {
     id,
-    ...orientedSize(width, height, field(fields, "originalOrientation")),
     takenAt: isoFromMillis(field(fields, "originalCreationDate")),
-    downloadUrl: async () => downloadUrl.replace("${f}", "photo.jpg"),
+    large,
+    small: rendition("resJPEGThumb") ?? large,
   };
 }
 
@@ -248,30 +276,46 @@ async function loadStreamAlbum(token: string): Promise<Album | undefined> {
   const stream = await streamRequest(partitionHost(token), token, "webstream", {
     streamCtag: null,
   });
+  const assetUrl = async (photoGuid: string, checksum: string) => {
+    const assets = await streamRequest(stream.host, token, "webasseturls", {
+      photoGuids: [photoGuid],
+    });
+    const asset = record(record(assets.json.items)[checksum]);
+    const location = text(asset.url_location);
+    const path = text(asset.url_path);
+    return location && path ? `https://${location}${path}` : undefined;
+  };
   const photos = ((stream.json.photos as unknown[] | undefined) ?? []).flatMap(
     (entry): Candidate[] => {
       const item = record(entry);
       if (item.mediaAssetType === "video") return [];
       const photoGuid = text(item.photoGuid);
-      const derivative = pickDerivative(item.derivatives);
-      if (!photoGuid || !derivative) return [];
+      const large = pickDerivative(item.derivatives);
+      const small = Object.values(record(item.derivatives))
+        .map((value) => {
+          const derivative = record(value);
+          return {
+            checksum: text(derivative.checksum) ?? "",
+            width: Number(derivative.width),
+            height: Number(derivative.height),
+          };
+        })
+        .filter((derivative) => derivative.checksum && derivative.width > 0)
+        .sort((left, right) => left.width - right.width)[0];
+      if (!photoGuid || !large) return [];
+      const rendition = (derivative: typeof large): Rendition => ({
+        width: derivative.width,
+        height: derivative.height,
+        url: () => assetUrl(photoGuid, derivative.checksum),
+      });
       const takenAt = text(item.dateCreated);
       return [
         {
           id: photoGuid,
-          width: derivative.width,
-          height: derivative.height,
           caption: text(item.caption),
           takenAt: takenAt && !Number.isNaN(Date.parse(takenAt)) ? takenAt : undefined,
-          downloadUrl: async () => {
-            const assets = await streamRequest(stream.host, token, "webasseturls", {
-              photoGuids: [photoGuid],
-            });
-            const asset = record(record(assets.json.items)[derivative.checksum]);
-            const location = text(asset.url_location);
-            const path = text(asset.url_path);
-            return location && path ? `https://${location}${path}` : undefined;
-          },
+          large: rendition(large),
+          small: rendition(small ?? large),
         },
       ];
     },
@@ -291,35 +335,109 @@ function photoForDate(photos: Candidate[], date: string): Candidate {
   return ordered[index];
 }
 
-async function loadPhotoOfDay(date: string): Promise<PhotoOfDayResult | undefined> {
-  const link = albumLink();
-  if (!link) return undefined;
-  try {
-    const album =
-      link.kind === "cloudkit"
+let albumPromise: Promise<Album | undefined> | undefined;
+
+/** The album, listed once per build. */
+function loadAlbum(): Promise<Album | undefined> {
+  albumPromise ??= (async () => {
+    const link = albumLink();
+    if (!link) return undefined;
+    try {
+      return link.kind === "cloudkit"
         ? await loadCloudKitAlbum(link.shortGuid)
         : await loadStreamAlbum(link.token);
-    if (!album?.photos.length) return undefined;
-    const chosen = photoForDate(album.photos, date);
-    const url = await chosen.downloadUrl();
+    } catch {
+      return undefined;
+    }
+  })();
+  return albumPromise;
+}
+
+async function download(rendition: Rendition): Promise<ArrayBuffer | undefined> {
+  try {
+    const url = await rendition.url();
     if (!url) return undefined;
     const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs()) });
-    if (!response.ok) return undefined;
-
-    return {
-      image: await response.arrayBuffer(),
-      photo: {
-        src: PHOTO_PATH,
-        width: chosen.width,
-        height: chosen.height,
-        caption: chosen.caption,
-        takenAt: chosen.takenAt,
-        albumName: album.name,
-      },
-    };
+    return response.ok ? await response.arrayBuffer() : undefined;
   } catch {
     return undefined;
   }
+}
+
+async function loadPhotoOfDay(date: string): Promise<PhotoOfDayResult | undefined> {
+  const album = await loadAlbum();
+  if (!album?.photos.length) return undefined;
+  const chosen = photoForDate(album.photos, date);
+  const image = await download(chosen.large);
+  if (!image) return undefined;
+  return {
+    image,
+    photo: {
+      src: PHOTO_PATH,
+      width: chosen.large.width,
+      height: chosen.large.height,
+      caption: chosen.caption,
+      takenAt: chosen.takenAt,
+      albumName: album.name,
+      // The page is encrypted, so the private link can ride along for "Open album".
+      albumUrl: process.env.ICLOUD_SHARED_ALBUM_URL?.trim() || undefined,
+    },
+  };
+}
+
+function yearAndMonthDay(iso: string, timeZone: string) {
+  const [year, month, day] = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone,
+  })
+    .format(Date.parse(iso))
+    .split("-");
+  return { year: Number(year), monthDay: `${month}-${day}` };
+}
+
+async function loadMemories(date: string, timeZone: string): Promise<MemoryResult[]> {
+  const album = await loadAlbum();
+  if (!album) return [];
+  const year = Number(date.slice(0, 4));
+  const dated = album.photos.flatMap((photo) =>
+    photo.takenAt ? [{ photo, taken: yearAndMonthDay(photo.takenAt, timeZone) }] : [],
+  );
+  const matches = dated
+    .filter(({ taken }) => taken.monthDay === date.slice(5) && taken.year < year)
+    // Newest first, so the strip reads "1 year ago, 3 years ago…".
+    .sort((left, right) => right.taken.year - left.taken.year)
+    .slice(0, MAX_MEMORIES);
+  const results = await Promise.all(
+    matches.map(async ({ photo, taken }): Promise<MemoryResult | undefined> => {
+      const image = await download(photo.small);
+      if (!image) return undefined;
+      return {
+        image,
+        memory: {
+          width: photo.small.width,
+          height: photo.small.height,
+          takenAt: photo.takenAt!,
+          yearsAgo: year - taken.year,
+        },
+      };
+    }),
+  );
+  return results.filter((result): result is MemoryResult => result !== undefined);
+}
+
+const memoryCache = new Map<string, Promise<MemoryResult[]>>();
+
+/** Photos taken on this date in earlier years, shared by the page and its image routes. */
+export function fetchMemories(date: string, timeZone: string): Promise<MemoryResult[]> {
+  const key = `${date}|${timeZone}`;
+  let pending = memoryCache.get(key);
+  if (!pending) {
+    pending = loadMemories(date, timeZone);
+    memoryCache.set(key, pending);
+  }
+  return pending;
 }
 
 const cache = new Map<string, Promise<PhotoOfDayResult | undefined>>();

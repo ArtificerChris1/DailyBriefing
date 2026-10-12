@@ -3607,3 +3607,54 @@ a:focus-visible {
   font-size: 10px;
   font-weight: 700;
 }
+
+/* "On this day" strip under the photo of the day. */
+.memories ul {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 8px 22px 18px;
+  list-style: none;
+}
+
+.memories img {
+  display: block;
+  width: 100%;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.memories small {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-faint);
+  font-size: 10px;
+}
+
+/* BGG rank movement since the previous day. */
+.hotness-rank {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.rank-move {
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1.1;
+}
+
+.rank-up {
+  color: var(--green);
+}
+
+.rank-down {
+  color: var(--now);
+}
+
+.rank-new {
+  color: var(--work);
+  text-transform: uppercase;
+}
