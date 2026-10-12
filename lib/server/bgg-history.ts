@@ -14,7 +14,7 @@ import { shiftDateKey } from "@/lib/briefing-window";
  * stored as plain JSON.
  */
 
-const DEFAULT_PATH = ".data/bgg-history.json";
+const DEFAULT_PATH = ".data/history/bgg-history.json";
 /** Snapshots older than this are dropped. */
 const KEEP_DAYS = 35;
 

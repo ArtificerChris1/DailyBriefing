@@ -30,6 +30,11 @@ interface ParsedEntry {
   updated?: unknown;
   date?: unknown;
   category?: unknown;
+  description?: unknown;
+  summary?: unknown;
+  /** content:encoded, with the namespace prefix removed by the parser. */
+  encoded?: unknown;
+  content?: unknown;
 }
 
 export interface RssHeadlineResult {
@@ -255,6 +260,26 @@ function topicTag(title: string, fallback: string): string {
   return topics.find(([pattern]) => pattern.test(lower))?.[1] ?? fallback;
 }
 
+/** Longest publisher summary kept for the one-sentence summary step. */
+const MAX_EXCERPT_CHARS = 600;
+
+/**
+ * The publisher's own summary as plain text: tags stripped, entities decoded,
+ * and WordPress's "The post … appeared first on …" trailer removed.
+ */
+function excerptFrom(entry: ParsedEntry, title: string): string | undefined {
+  const raw = scalar(entry.description) ?? scalar(entry.summary) ?? scalar(entry.encoded) ?? scalar(entry.content);
+  if (!raw) return undefined;
+  let text = decodeEntities(decodeEntities(raw).replace(/<[^>]+>/g, " "))
+    .replace(/The post .*? appeared first on .*?\.?\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  // Some feeds open the summary with the headline itself.
+  if (text.toLowerCase().startsWith(title.toLowerCase())) text = text.slice(title.length).trim();
+  if (text.length < 20) return undefined;
+  return text.length > MAX_EXCERPT_CHARS ? `${text.slice(0, MAX_EXCERPT_CHARS)}…` : text;
+}
+
 function decodeEntities(value: string): string {
   const named: Record<string, string> = {
     amp: "&",
@@ -321,6 +346,7 @@ async function readFeed(
           .slice(0, 22)}`,
         kind: "news",
         title: decodeEntities(title),
+        excerpt: excerptFrom(entry, decodeEntities(title)),
         publisher: feed.publisher,
         publishedAt: relativePublished(published, now),
         url,

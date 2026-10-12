@@ -28,8 +28,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      # Write access only to replace the reminders snapshot and BGG history,
-      # each on its own data branch.
+      # Write access only to replace the reminders snapshot and the history
+      # files, each on its own data branch.
       contents: write
       pages: read
     # The credentials are stored as github-pages environment secrets, which a
@@ -75,16 +75,17 @@ jobs:
             echo "No reminders have been saved yet."
           fi
 
-      # Yesterday's BGG hot list, for rank movement. Public data, so the
-      # history-data branch holds it as plain JSON.
-      - name: Load BGG rank history
+      # Public data carried between builds: the BGG hot list by day (for
+      # rank movement) and news summaries by story (so each story is only
+      # summarised once). The history-data branch holds it as plain JSON.
+      - name: Load history
         run: |
-          mkdir -p .data
+          mkdir -p .data/history .data/history-loaded
           if git fetch -q --depth 1 origin history-data; then
-            git show FETCH_HEAD:bgg-history.json > .data/bgg-history.json
-            cp .data/bgg-history.json .data/bgg-history.loaded.json
+            git archive FETCH_HEAD | tar -x -C .data/history
+            cp -r .data/history/. .data/history-loaded/
           else
-            echo "No BGG history yet."
+            echo "No history yet."
           fi
 
       - name: Build static site
@@ -122,20 +123,18 @@ jobs:
           BRIEF_MODEL: ${{ vars.BRIEF_MODEL }}
           TRAVEL_BUFFER_MINUTES: ${{ vars.TRAVEL_BUFFER_MINUTES }}
 
-      # The build adds today's list to the history once a day; push it back
-      # only when it changed.
-      - name: Save BGG rank history
+      # Push the history back only when the build changed it.
+      - name: Save history
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          [ -f .data/bgg-history.json ] || exit 0
-          if cmp -s .data/bgg-history.json .data/bgg-history.loaded.json; then exit 0; fi
+          if diff -rq .data/history .data/history-loaded > /dev/null; then exit 0; fi
           mkdir -p "$RUNNER_TEMP/history"
-          cp .data/bgg-history.json "$RUNNER_TEMP/history/"
+          cp -r .data/history/. "$RUNNER_TEMP/history/"
           cd "$RUNNER_TEMP/history"
           git init -q -b history-data
-          git add bgg-history.json
-          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Update BGG rank history"
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Update history"
           git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" history-data
 
       - uses: actions/upload-pages-artifact@v5

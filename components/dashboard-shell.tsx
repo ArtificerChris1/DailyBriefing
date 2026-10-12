@@ -836,10 +836,21 @@ export function DashboardShell({
                             <span className="release-copy">
                               <strong>{release.title}</strong>
                               <small>
-                                {[release.detail, release.by]
+                                {[
+                                  // Generic labels give way to real availability.
+                                  release.availability &&
+                                  (release.detail === "Theatrical release" ||
+                                    release.detail === "Series premiere")
+                                    ? undefined
+                                    : release.detail,
+                                  release.by,
+                                ]
                                   .filter(Boolean)
                                   .join(" · ")}
                               </small>
+                              {release.availability && (
+                                <small className="release-availability">{release.availability}</small>
+                              )}
                             </span>
                             <span
                               className={`release-medium release-medium-${release.medium}`}
@@ -1567,6 +1578,7 @@ export function DashboardShell({
                           <div>
                             <p className="headline-meta"><span>{headline.interestTag}</span> {headline.publisher} · {headline.publishedAt}</p>
                             <h4>{headline.title}</h4>
+                            {headline.summary && <p className="headline-summary">{headline.summary}</p>}
                           </div>
                           <button
                             className="row-action"

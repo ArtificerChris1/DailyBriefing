@@ -133,6 +133,10 @@ export interface SportsItem extends BaseItem<"sports"> {
 }
 
 export interface NewsItem extends BaseItem<"news"> {
+  /** One sentence on what the story says; see lib/server/news-summaries.ts. */
+  summary?: string;
+  /** The publisher's own summary. Used to write `summary`, then dropped. */
+  excerpt?: string;
   publisher: string;
   publishedAt: string;
   url: string;
@@ -177,6 +181,8 @@ export interface ReleaseItem {
   detail?: string;
   posterUrl?: string;
   url?: string;
+  /** Where to watch, e.g. "Streaming on Netflix" or "In theaters Oct 17". */
+  availability?: string;
 }
 
 export interface UpcomingReleasesPanel {

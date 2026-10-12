@@ -9,7 +9,7 @@ import {
   addDays,
   environmentNumber,
 } from "./shared";
-import { fetchScreenReleases } from "./tmdb-screen";
+import { fetchScreenReleases, withScreenAvailability } from "./tmdb-screen";
 
 /** Enough to fill the card without turning it into a catalogue. */
 const MAX_ITEMS = 24;
@@ -128,7 +128,8 @@ export async function fetchUpcomingReleases(
           // source claims.
           item.releasesOn >= today && item.releasesOn <= to,
   );
-  const items = balance(newestComics(inWindow));
+  const watchable = await withScreenAvailability(balance(newestComics(inWindow)), today);
+  const items = watchable.items;
 
   // Credit only what actually contributed. Naming a source that returned
   // nothing reads as though its releases are covered when they are not.
@@ -136,6 +137,7 @@ export async function fetchUpcomingReleases(
   const attribution =
     [
       contributed.has("movie") || contributed.has("tv") ? "TMDB" : undefined,
+      watchable.credited ? "JustWatch" : undefined,
       contributed.has("book") ? "Reactor" : undefined,
       contributed.has("comic") ? "Comic Vine" : undefined,
     ]

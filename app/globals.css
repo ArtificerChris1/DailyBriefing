@@ -3658,3 +3658,18 @@ a:focus-visible {
   color: var(--work);
   text-transform: uppercase;
 }
+
+/* Where to watch, under a film or show. */
+.release-copy .release-availability {
+  margin-top: 2px;
+  color: var(--green);
+  font-weight: 650;
+}
+
+/* One-sentence summary under each headline. */
+.headline-summary {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}

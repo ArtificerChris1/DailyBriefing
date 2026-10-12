@@ -250,3 +250,130 @@ export async function fetchScreenReleases(
 
   return { items: deduped, warnings, configured: true };
 }
+
+// ---------------------------------------------------------------------------
+// Where to watch
+
+/** TMDB release types: 2 limited theatrical, 3 theatrical, 4 digital. */
+const THEATRICAL_TYPES = new Set([2, 3]);
+const DIGITAL_TYPE = 4;
+/** Provider names listed before "and more". */
+const MAX_PROVIDERS = 2;
+
+const detailCache = new Map<string, Promise<Record<string, unknown> | undefined>>();
+
+function details(kind: "movie" | "tv", id: string): Promise<Record<string, unknown> | undefined> {
+  const key = `${kind}:${id}`;
+  let pending = detailCache.get(key);
+  if (!pending) {
+    const url = withKey(new URL(`${TMDB_BASE}/${kind}/${id}`));
+    url.searchParams.set(
+      "append_to_response",
+      kind === "movie" ? "release_dates,watch/providers" : "watch/providers",
+    );
+    pending = fetchJson(url.toString(), {
+      headers: authHeaders(),
+      timeoutMs: environmentNumber("TMDB_TIMEOUT_MS", DEFAULT_TIMEOUT_MS),
+    })
+      .then((body) => (isRecord(body) ? body : undefined))
+      .catch(() => undefined);
+    detailCache.set(key, pending);
+  }
+  return pending;
+}
+
+function providerNames(body: Record<string, unknown>, region: string, kind: string): string[] {
+  const providers = isRecord(body["watch/providers"]) ? body["watch/providers"] : {};
+  const results = isRecord(providers.results) ? providers.results : {};
+  const local = isRecord(results[region]) ? results[region] : {};
+  const list = Array.isArray(local[kind]) ? local[kind] : [];
+  return [
+    ...new Set(
+      list.filter(isRecord).flatMap((entry) => {
+        const name = textOf(entry.provider_name);
+        return name ? [name] : [];
+      }),
+    ),
+  ];
+}
+
+function listed(names: string[]): string {
+  return names.length > MAX_PROVIDERS
+    ? `${names.slice(0, MAX_PROVIDERS).join(", ")} and more`
+    : names.join(" and ");
+}
+
+function shortDate(date: string): string {
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(
+    Date.parse(`${date}T12:00:00Z`),
+  );
+}
+
+function movieAvailability(body: Record<string, unknown>, region: string, today: string) {
+  const streaming = providerNames(body, region, "flatrate");
+  if (streaming.length) return `Streaming on ${listed(streaming)}`;
+  const rentOrBuy = providerNames(body, region, "rent").concat(providerNames(body, region, "buy"));
+
+  const releaseDates = isRecord(body.release_dates) && Array.isArray(body.release_dates.results)
+    ? body.release_dates.results.filter(isRecord)
+    : [];
+  const local = releaseDates.find((entry) => entry.iso_3166_1 === region);
+  const dates = (Array.isArray(local?.release_dates) ? local.release_dates : [])
+    .filter(isRecord)
+    .flatMap((entry) => {
+      const date = textOf(entry.release_date)?.slice(0, 10);
+      return date && typeof entry.type === "number" ? [{ type: entry.type, date }] : [];
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const theatrical = dates.find((entry) => THEATRICAL_TYPES.has(entry.type));
+  const digital = dates.find((entry) => entry.type === DIGITAL_TYPE);
+
+  if (rentOrBuy.length && (!digital || digital.date <= today)) {
+    return `Rent or buy on ${listed([...new Set(rentOrBuy)])}`;
+  }
+  if (digital && digital.date <= today) return "On digital";
+  if (theatrical) {
+    const inTheaters = theatrical.date <= today ? "In theaters" : `In theaters ${shortDate(theatrical.date)}`;
+    return digital ? `${inTheaters} · digital ${shortDate(digital.date)}` : inTheaters;
+  }
+  return digital ? `Digital ${shortDate(digital.date)}` : undefined;
+}
+
+function tvAvailability(body: Record<string, unknown>, region: string) {
+  const streaming = providerNames(body, region, "flatrate");
+  if (streaming.length) return `Streaming on ${listed(streaming)}`;
+  const network = Array.isArray(body.networks)
+    ? body.networks.filter(isRecord).map((entry) => textOf(entry.name)).find(Boolean)
+    : undefined;
+  return network ? `On ${network}` : undefined;
+}
+
+/**
+ * Adds where to watch each film and show: streaming services, rent or buy,
+ * or theatrical and digital dates, for TMDB_REGION. Provider data is
+ * JustWatch's, which TMDB requires to be credited; `credited` reports
+ * whether any of it was used.
+ */
+export async function withScreenAvailability(
+  items: ReleaseItem[],
+  today: string,
+): Promise<{ items: ReleaseItem[]; credited: boolean }> {
+  if (!authHeaders()) return { items, credited: false };
+  const region = process.env.TMDB_REGION?.trim() || "US";
+  let credited = false;
+  const enriched = await Promise.all(
+    items.map(async (item) => {
+      const match = /^tmdb-(movie|tv|episode)-(\d+)/.exec(item.id);
+      if (!match) return item;
+      const kind = match[1] === "movie" ? "movie" : "tv";
+      const body = await details(kind, match[2]);
+      if (!body) return item;
+      const availability =
+        kind === "movie" ? movieAvailability(body, region, today) : tvAvailability(body, region);
+      if (!availability) return item;
+      if (/^(Streaming|Rent)/.test(availability)) credited = true;
+      return { ...item, availability };
+    }),
+  );
+  return { items: enriched, credited };
+}

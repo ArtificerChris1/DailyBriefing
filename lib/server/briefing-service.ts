@@ -41,6 +41,7 @@ import { fetchLiveSports } from "@/lib/providers/sports/live-sports";
 import { fetchOpenMeteoWeather } from "@/lib/providers/weather/open-meteo";
 import { recencyCutoff, withinRecencyWindow } from "@/lib/recency";
 import { withRankMovement } from "@/lib/server/bgg-history";
+import { withNewsSummaries } from "@/lib/server/news-summaries";
 import { getReminders } from "@/lib/server/reminders";
 import { todayExtras } from "@/lib/server/today-extras";
 import { withDepartures } from "@/lib/server/travel";
@@ -513,7 +514,7 @@ export async function getBriefingPayload(
       weather,
       hourlyWeather,
       sports: recentSports,
-      headlines: recentHeadlines,
+      headlines: await withNewsSummaries(recentHeadlines, today),
       sources,
     },
     connections: [
