@@ -2,7 +2,7 @@
 
 import { CalendarCheck, Clock, MapPin, Navigation } from "lucide-react";
 
-import { Card, EmptyState, SourceBadge } from "@/components/ui";
+import { CalendarNotice, Card, EmptyState, SourceBadge } from "@/components/ui";
 import type { CalendarItem } from "@/lib/briefing-types";
 import { clockLabel, eventDuration, eventStartParts } from "@/lib/format";
 
@@ -12,7 +12,9 @@ export function UpNextCard({
   isToday,
   nowMs,
   timeZone,
+  missingCalendars = [],
 }: {
+  missingCalendars?: string[];
   agenda: CalendarItem[];
   isToday: boolean;
   nowMs: number;
@@ -41,6 +43,7 @@ export function UpNextCard({
         </a>
       }
     >
+      <CalendarNotice missing={missingCalendars} />
       {next && parts ? (
         <div className="up-next">
           <p className="up-next-time">

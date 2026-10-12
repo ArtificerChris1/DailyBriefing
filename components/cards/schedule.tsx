@@ -3,7 +3,7 @@
 import { CalendarDays, CalendarRange, MapPin, Navigation, Umbrella } from "lucide-react";
 import { useState } from "react";
 
-import { Badge, Card, EmptyState, SourceBadge, WeatherGlyph } from "@/components/ui";
+import { Badge, CalendarNotice, Card, EmptyState, SourceBadge, WeatherGlyph } from "@/components/ui";
 import type { CalendarItem, HourlyWeatherPoint } from "@/lib/briefing-types";
 import {
   clockLabel,
@@ -113,7 +113,10 @@ export function ScheduleCard({
   isToday,
   nowMs,
   timeZone,
+  missingCalendars = [],
 }: {
+  /** Calendars that failed to load, e.g. ["work"]. */
+  missingCalendars?: string[];
   agenda: CalendarItem[];
   hourly: HourlyWeatherPoint[];
   isToday: boolean;
@@ -158,6 +161,7 @@ export function ScheduleCard({
       id="schedule"
       meta={visible.length ? plural(visible.length, "event") : undefined}
     >
+      <CalendarNotice missing={missingCalendars} />
       {visible.length === 0 ? (
         <EmptyState icon={CalendarDays} title={isToday ? "Nothing on the calendar today" : "Nothing on the calendar"}>
           The hourly forecast is in the weather card.

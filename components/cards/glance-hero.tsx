@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { Card, WeatherGlyph } from "@/components/ui";
+import { CalendarNotice, Card, WeatherGlyph } from "@/components/ui";
 import type {
   BriefingSnapshot,
   CalendarItem,
@@ -49,6 +49,13 @@ function dateKey(iso: string, timeZone: string): string {
     day: "2-digit",
     timeZone,
   }).format(Date.parse(iso));
+}
+
+/** Calendars whose feed failed for this day's briefing, by everyday name. */
+export function missingCalendars(day: Pick<BriefingSnapshot, "sources">): string[] {
+  return day.sources
+    .filter((source) => source.state === "error" && (source.provider === "ical" || source.provider === "apple-calendar"))
+    .map((source) => (source.provider === "ical" ? "work" : "home"));
 }
 
 /** Holds ("Check with me before scheduling") are placeholders, not plans. */
@@ -132,6 +139,7 @@ export function GlanceHero({
       }
     >
       <div className="hero-body" aria-busy={!day}>
+        {day && <CalendarNotice missing={missingCalendars(day)} />}
         {brief ? (
           <>
             <p className="hero-headline">{brief.headline}</p>

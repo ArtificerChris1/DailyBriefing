@@ -697,6 +697,29 @@ code {
   font-size: var(--text-sm);
 }
 
+/* A data problem worth knowing about, e.g. a calendar that failed to load. */
+.card-warning {
+  margin: 0 var(--space-4) var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-md);
+  background: var(--warning-soft);
+  color: var(--text);
+  font-size: var(--text-sm);
+  max-width: 70ch;
+}
+
+.hero-body .card-warning {
+  margin: 0;
+}
+
+@media (min-width: 64em) {
+  .card-warning {
+    margin-left: var(--space-5);
+    margin-right: var(--space-5);
+  }
+}
+
 .list-group {
   padding: 0 var(--space-4);
 }

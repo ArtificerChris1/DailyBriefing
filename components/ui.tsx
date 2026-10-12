@@ -175,6 +175,22 @@ export function SourceBadge({ zone, label }: { zone: TrustZone; label: string })
   );
 }
 
+/**
+ * Says which calendars failed to load when the briefing was built, so a
+ * missing calendar is never mistaken for a free day.
+ */
+export function CalendarNotice({ missing }: { missing: string[] }) {
+  if (!missing.length) return null;
+  const names = missing.join(" and ");
+  return (
+    <p className="card-warning">
+      <Badge tone="warning">Missing</Badge> Your {names} {missing.length === 1 ? "calendar" : "calendars"}{" "}
+      couldn&rsquo;t be loaded when this briefing was built, so {missing.length === 1 ? "its" : "their"} events are
+      not shown. The next update will try again.
+    </p>
+  );
+}
+
 /** A compact empty state with an icon and a useful next step. */
 export function EmptyState({
   icon: Icon,

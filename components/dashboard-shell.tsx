@@ -14,7 +14,7 @@ import {
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { BirthdaysCard } from "@/components/cards/birthdays";
-import { GlanceHero } from "@/components/cards/glance-hero";
+import { GlanceHero, missingCalendars } from "@/components/cards/glance-hero";
 import { HotnessCard } from "@/components/cards/hotness";
 import { NewsCard } from "@/components/cards/news";
 import { PhotoCard } from "@/components/cards/photo";
@@ -527,7 +527,13 @@ export function DashboardShell({
           )}
 
           <div className="row row-split">
-            <UpNextCard agenda={briefing.agenda} isToday={isToday} nowMs={nowMs} timeZone={timeZone} />
+            <UpNextCard
+              agenda={briefing.agenda}
+              isToday={isToday}
+              nowMs={nowMs}
+              timeZone={timeZone}
+              missingCalendars={missingCalendars(briefing)}
+            />
             <WeatherCard
               weather={briefing.weather}
               hourly={briefing.hourlyWeather}
@@ -540,6 +546,7 @@ export function DashboardShell({
           </div>
 
           <ScheduleCard
+            missingCalendars={missingCalendars(briefing)}
             agenda={briefing.agenda}
             hourly={briefing.hourlyWeather}
             isToday={isToday}

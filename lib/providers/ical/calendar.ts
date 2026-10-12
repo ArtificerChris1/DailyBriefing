@@ -264,7 +264,45 @@ function normalizeInstance(
  * quote the private feed URL, and the briefing is a public static site, so
  * those are reported generically instead.
  */
-class CalendarFeedError extends Error {}
+class CalendarFeedError extends Error {
+  constructor(
+    message: string,
+    /** Whether trying again soon might succeed (429 and 5xx). */
+    readonly retryable = false,
+  ) {
+    super(message);
+  }
+}
+
+/** A failure worth one more try: timeouts, network errors, 429 and 5xx. */
+function isTransient(error: unknown): boolean {
+  if (error instanceof CalendarFeedError) return error.retryable;
+  return error instanceof Error;
+}
+
+const RETRY_DELAY_MS = 2_000;
+/** How long one download serves every page of a build. */
+const FEED_REUSE_MS = 10 * 60 * 1000;
+const feedBodies = new Map<string, { expiresAt: number; body: Promise<string> }>();
+
+/**
+ * The feed's text, downloaded once and shared: a build renders every day of
+ * the pager and looks several days ahead, and fetching the same feed two
+ * dozen times invites rate limiting. A transient failure is retried once;
+ * a failed download is not kept, so the next page tries again.
+ */
+function feedBody(url: string, timeoutMs: number): Promise<string> {
+  const cached = feedBodies.get(url);
+  if (cached && cached.expiresAt > Date.now()) return cached.body;
+  const body = downloadFeed(url, timeoutMs).catch(async (error: unknown) => {
+    if (!isTransient(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    return downloadFeed(url, timeoutMs);
+  });
+  feedBodies.set(url, { expiresAt: Date.now() + FEED_REUSE_MS, body });
+  body.catch(() => feedBodies.delete(url));
+  return body;
+}
 
 async function downloadFeed(
   url: string,
@@ -283,7 +321,10 @@ async function downloadFeed(
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new CalendarFeedError(`The calendar feed returned HTTP ${response.status}.`);
+      throw new CalendarFeedError(
+        `The calendar feed returned HTTP ${response.status}.`,
+        response.status === 429 || response.status >= 500,
+      );
     }
 
     const declaredLength = Number(response.headers.get("content-length"));
@@ -334,7 +375,7 @@ export async function fetchIcalCalendar(input: {
   }
 
   try {
-    const body = await downloadFeed(configuration.url, configuration.timeoutMs);
+    const body = await feedBody(configuration.url, configuration.timeoutMs);
     const calendar = await ical.async.parseICS(body);
     const rangeStart = new Date(input.from);
     const rangeEnd = new Date(input.to);
