@@ -17,6 +17,7 @@ import {
   clampToWindow,
   dayOffsetBetween,
   isDateKey,
+  shiftDateKey,
 } from "@/lib/briefing-window";
 import {
   agenda as demoAgenda,
@@ -452,9 +453,11 @@ export async function getBriefingPayload(
           return Number.isNaN(end) || end >= cutoff;
         })
       : agenda;
+  // Sports keep all of yesterday, not a rolling day, so the card's Yesterday
+  // section is whole even when the build runs late in the evening.
   const recentSports = sportsInWindow(
     sportsResult.ok ? sportsResult.items : sports,
-    cutoff,
+    Math.min(cutoff, Date.parse(localTimeToIso(shiftDateKey(today, -1), 0, 0, timeZone))),
     nowMs,
   );
   const recentHeadlines = (

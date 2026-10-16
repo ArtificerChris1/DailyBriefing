@@ -1,5 +1,5 @@
 import type { NewsItem, ReleaseItem, SportsItem } from "@/lib/briefing-types";
-import { dayOffsetBetween } from "@/lib/briefing-window";
+import { dayOffsetBetween, shiftDateKey } from "@/lib/briefing-window";
 
 /**
  * How the dashboard arranges what it already has: the time-of-day mode and the
@@ -40,36 +40,32 @@ function dateKeyIn(instant: number, timeZone: string): string {
 }
 
 export interface SportsGroups {
-  /** Finished in roughly the last day and a half: the overnight results. */
-  results: SportsItem[];
+  /** Played the day before the one being viewed. */
+  yesterday: SportsItem[];
   /** Live now, or scheduled on the day being viewed. */
   today: SportsItem[];
   /** Everything later, for a compact schedule. */
   upcoming: SportsItem[];
 }
 
-const RESULTS_WINDOW_MS = 36 * 60 * 60 * 1000;
-
 export function groupSports(
   items: SportsItem[],
   date: string,
-  nowMs: number,
   timeZone: string,
 ): SportsGroups {
-  const groups: SportsGroups = { results: [], today: [], upcoming: [] };
+  const groups: SportsGroups = { yesterday: [], today: [], upcoming: [] };
+  const dayBefore = shiftDateKey(date, -1);
   for (const item of items) {
     const at = item.occursAt ? Date.parse(item.occursAt) : Number.NaN;
-    if (item.state === "final") {
-      if (Number.isNaN(at) || nowMs - at <= RESULTS_WINDOW_MS) groups.results.push(item);
-    } else if (item.state === "live" || (!Number.isNaN(at) && dateKeyIn(at, timeZone) === date)) {
-      groups.today.push(item);
-    } else {
-      groups.upcoming.push(item);
-    }
+    const day = Number.isNaN(at) ? undefined : dateKeyIn(at, timeZone);
+    if (item.state === "live" || day === date) groups.today.push(item);
+    else if (day === dayBefore) groups.yesterday.push(item);
+    // Older results have had their day; an undated final has no day at all.
+    else if (item.state !== "final" && (day === undefined || day > date)) groups.upcoming.push(item);
   }
   const byTime = (left: SportsItem, right: SportsItem) =>
     Date.parse(left.occursAt ?? "") - Date.parse(right.occursAt ?? "");
-  groups.results.sort((left, right) => byTime(right, left));
+  groups.yesterday.sort(byTime);
   groups.today.sort(byTime);
   groups.upcoming.sort(byTime);
   return groups;
@@ -78,6 +74,13 @@ export function groupSports(
 /** "Sat 7:05 PM", for the compact upcoming schedule. */
 export function compactGameTime(item: SportsItem, timeZone: string): string {
   if (!item.occursAt) return item.startsAt ?? "";
+  // The feed's clock is a placeholder until the start time is announced.
+  if (item.startsAt?.endsWith("Time TBD")) {
+    const day = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone }).format(
+      Date.parse(item.occursAt),
+    );
+    return `${day} · TBD`;
+  }
   return new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     hour: "numeric",

@@ -3,7 +3,8 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import type { SportsItem } from "@/lib/briefing-types";
-import { recencyCutoff } from "@/lib/recency";
+import { fetchLeagueTeamItems, leagueTeams } from "@/lib/providers/sports/league-feeds";
+import { fetchJson, relativeStart, RESULTS_LOOKBACK_MS } from "@/lib/providers/sports/shared";
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_CACHE_SECONDS = 15 * 60;
@@ -35,16 +36,6 @@ interface SportsDbEvent {
   strStatus?: string;
   dateEvent?: string;
   strTimestamp?: string;
-}
-
-interface MlbGame {
-  gamePk?: number;
-  gameDate?: string;
-  status?: { detailedState?: string; abstractGameState?: string };
-  teams?: {
-    away?: { score?: number; team?: { name?: string } };
-    home?: { score?: number; team?: { name?: string } };
-  };
 }
 
 interface MlbStanding {
@@ -94,69 +85,18 @@ export interface LiveSportsResult {
   error?: string;
 }
 
+/**
+ * Teams with no league or ESPN feed. Everyone else is read from
+ * league-feeds.ts, which also covers the MLB, NHL and Forward Madison standings
+ * teams below.
+ */
 const teams: TeamDefinition[] = [
-  {
-    id: "142160",
-    name: "Forward Madison FC",
-    logoPath: "/team-logos/forward-madison-fc.png",
-    league: "USL League One",
-    group: "local",
-  },
   {
     id: "141445",
     name: "Cedar Rapids RoughRiders",
     logoPath: "https://r2.thesportsdb.com/images/media/team/badge/0eatd81756967453.png",
     league: "USHL",
     group: "local",
-  },
-  {
-    id: "135252",
-    name: "Boston Red Sox",
-    logoPath: "/team-logos/boston-red-sox.svg",
-    league: "MLB",
-    group: "seattle-boston",
-  },
-  {
-    id: "140082",
-    name: "Seattle Kraken",
-    logoPath: "https://r2.thesportsdb.com/images/media/team/badge/zsx49m1595775836.png",
-    league: "NHL",
-    group: "seattle-boston",
-  },
-  {
-    id: "134149",
-    name: "Seattle Sounders FC",
-    logoPath: "/team-logos/seattle-sounders-fc.png",
-    league: "MLS",
-    group: "seattle-boston",
-  },
-  {
-    id: "134291",
-    name: "São Paulo FC",
-    logoPath: "/team-logos/sao-paulo-fc.svg",
-    league: "Brazilian Série A",
-    group: "international",
-  },
-  {
-    id: "134940",
-    name: "Green Bay Packers",
-    logoPath: "https://r2.thesportsdb.com/images/media/team/badge/uwbfw01784719173.png",
-    league: "NFL",
-    group: "wisconsin",
-  },
-  {
-    id: "134874",
-    name: "Milwaukee Bucks",
-    logoPath: "https://r2.thesportsdb.com/images/media/team/badge/olhug01621594702.png",
-    league: "NBA",
-    group: "wisconsin",
-  },
-  {
-    id: "135274",
-    name: "Milwaukee Brewers",
-    logoPath: "https://r2.thesportsdb.com/images/media/team/badge/08kh2a1595775193.png",
-    league: "MLB",
-    group: "wisconsin",
   },
 ];
 
@@ -173,29 +113,6 @@ function pause(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function fetchJson<T>(
-  url: string,
-  timeoutMs: number,
-  headers?: Record<string, string>,
-): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, {
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "Brief-Daily-Sports/1.0",
-        ...headers,
-      },
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error(`Sports feed returned HTTP ${response.status}.`);
-    return (await response.json()) as T;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 function eventInstant(event: SportsDbEvent): Date | undefined {
   const timestamp = event.strTimestamp?.trim();
   const value = timestamp
@@ -207,47 +124,6 @@ function eventInstant(event: SportsDbEvent): Date | undefined {
       : undefined;
   if (!value || Number.isNaN(Date.parse(value))) return undefined;
   return new Date(value);
-}
-
-function relativeStart(value: Date, now: Date, timeZone: string): string {
-  const date = new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone,
-  }).format(value);
-  const today = new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone,
-  }).format(now);
-  const tomorrow = new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone,
-  }).format(new Date(now.getTime() + 86_400_000));
-  const yesterday = new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone,
-  }).format(new Date(now.getTime() - 86_400_000));
-  const clock = new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone,
-  }).format(value);
-  if (date === today) return `Today · ${clock}`;
-  if (date === tomorrow) return `Tomorrow · ${clock}`;
-  if (date === yesterday) return `Yesterday · ${clock}`;
-  return `${new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    timeZone,
-  }).format(value)} · ${clock}`;
 }
 
 function stateFor(event: SportsDbEvent, startsAt: Date, now: Date): SportsItem["state"] {
@@ -368,15 +244,15 @@ async function fetchTeamSchedule(
 }
 
 /**
- * A finished game earns its own card only while it is still inside the briefing's
- * rolling day, and only when the feed carries a real final score: postponed and
+ * A finished game earns its own card only while it is recent enough to land in
+ * yesterday or today on the page, and only when the feed carries a real final score: postponed and
  * abandoned fixtures also arrive dated in the past, with the scores left empty.
  */
 function isFreshResult(event: SportsDbEvent, now: Date): boolean {
   if (!COMPLETED_STATUSES.has((event.strStatus ?? "").toUpperCase())) return false;
   if (!scoreLabel(event)) return false;
   const instant = eventInstant(event);
-  return Boolean(instant && instant.getTime() >= recencyCutoff(now.getTime()));
+  return Boolean(instant && instant.getTime() >= now.getTime() - RESULTS_LOOKBACK_MS);
 }
 
 /**
@@ -399,13 +275,15 @@ async function fetchTeamItems(
   });
   const completed = await fetchTeamSchedule(client, "previous", team.id, timeoutMs);
   const recent = completed.find((event) => eventInstant(event));
-  const result = recent && isFreshResult(recent, now) ? recent : undefined;
+  const results = completed.filter((event) => isFreshResult(event, now));
   // A game that kicked off in the last few hours can sit in both feeds, and two
   // cards for one event would collide on the id derived from it.
   const scheduled =
-    next && next.idEvent && next.idEvent === result?.idEvent ? undefined : next;
+    next && next.idEvent && results.some((event) => event.idEvent === next.idEvent)
+      ? undefined
+      : next;
   const items: SportsItem[] = [];
-  if (result) {
+  for (const result of results) {
     const item = sportsItem(team, result, undefined, now, timeZone, fetchedAt);
     if (item) items.push(item);
   }
@@ -415,7 +293,7 @@ async function fetchTeamItems(
     const item = sportsItem(
       team,
       scheduled,
-      result ? undefined : recent,
+      results.length ? undefined : recent,
       now,
       timeZone,
       fetchedAt,
@@ -423,112 +301,6 @@ async function fetchTeamItems(
     if (item) items.push(item);
   }
   return items;
-}
-
-function isoDate(value: Date): string {
-  return value.toISOString().slice(0, 10);
-}
-
-/**
- * Same split as the TheSportsDB teams: recent results and the next game are all
- * cards, not candidates for one slot. A Midwest League doubleheader legitimately
- * leaves two results behind, so every finished game in the window is kept.
- */
-async function fetchKernelsItems(
-  now: Date,
-  timeZone: string,
-  fetchedAt: string,
-  timeoutMs: number,
-): Promise<SportsItem[]> {
-  const start = new Date(now.getTime() - 2 * 86_400_000);
-  const end = new Date(now.getTime() + 14 * 86_400_000);
-  const response = await fetchJson<{ dates?: Array<{ games?: MlbGame[] }> }>(
-    `https://statsapi.mlb.com/api/v1/schedule?sportId=13&teamId=492&startDate=${isoDate(start)}&endDate=${isoDate(end)}`,
-    timeoutMs,
-  );
-  const games = (response.dates ?? []).flatMap((date) => date.games ?? []);
-  const upcoming = games.find((game) => {
-    const time = Date.parse(game.gameDate ?? "");
-    return Number.isFinite(time) && time >= now.getTime() - 3 * 60 * 60 * 1000;
-  });
-  const cutoff = recencyCutoff(now.getTime());
-  // A suspended game is listed under both its original and its resumption date
-  // with one `gamePk`. The later entry is the one that actually finished, and
-  // keeping both would give two cards the same id.
-  const finals = new Map<number, MlbGame>();
-  for (const game of games) {
-    if (game.status?.abstractGameState !== "Final" || !game.gamePk) continue;
-    const time = Date.parse(game.gameDate ?? "");
-    if (!Number.isFinite(time) || time < cutoff) continue;
-    const previous = finals.get(game.gamePk);
-    if (!previous || Date.parse(previous.gameDate ?? "") < time) {
-      finals.set(game.gamePk, game);
-    }
-  }
-  const selected = [...finals.values()];
-  if (upcoming?.gamePk && !finals.has(upcoming.gamePk)) selected.push(upcoming);
-  return selected
-    .map((game) => kernelsItem(game, now, timeZone, fetchedAt))
-    .filter((item): item is SportsItem => Boolean(item));
-}
-
-function kernelsItem(
-  game: MlbGame,
-  now: Date,
-  timeZone: string,
-  fetchedAt: string,
-): SportsItem | undefined {
-  if (!game.gameDate || !game.gamePk) return undefined;
-  const instant = new Date(game.gameDate);
-  const status = game.status?.abstractGameState;
-  const detailedStatus = game.status?.detailedState;
-  const state: SportsItem["state"] =
-    status === "Final"
-      ? "final"
-      : status === "Live" && detailedStatus !== "Suspended"
-        ? "live"
-        : "scheduled";
-  const home = game.teams?.home;
-  const away = game.teams?.away;
-  const teamIsHome = home?.team?.name === "Cedar Rapids Kernels";
-  const score =
-    home?.score !== undefined && away?.score !== undefined
-      ? `${away.team?.name ?? "Away"} ${away.score} · ${home.team?.name ?? "Home"} ${home.score}`
-      : undefined;
-  return {
-    id: `sports-mlb-${game.gamePk}`,
-    kind: "sports",
-    title: `${away?.team?.name ?? "Away"} vs ${home?.team?.name ?? "Home"}`,
-    team: "Cedar Rapids Kernels",
-    logoPath: "/team-logos/cedar-rapids-kernels.svg",
-    opponent: teamIsHome
-      ? away?.team?.name ?? "Opponent TBD"
-      : home?.team?.name ?? "Opponent TBD",
-    startsAt:
-      state === "scheduled" && detailedStatus === "Suspended"
-        ? "Suspended"
-        : relativeStart(instant, now, timeZone),
-    occursAt: instant.toISOString(),
-    state,
-    scoreLabel: score,
-    league: "MiLB · Midwest League",
-    group: "local",
-    context:
-      state === "final"
-        ? "Completed Kernels game."
-        : detailedStatus ?? "Upcoming Kernels game.",
-    zone: "public",
-    sensitivity: "public",
-    importance: Math.abs(instant.getTime() - now.getTime()) < 86_400_000 ? "high" : "normal",
-    surfacedBecause: state === "final" ? "Latest local result" : "Upcoming local game",
-    source: {
-      provider: "sports",
-      connectionId: "mlb-stats",
-      externalId: String(game.gamePk),
-      fetchedAt,
-      deepLink: `https://www.milb.com/gameday/${game.gamePk}/final/box`,
-    },
-  };
 }
 
 interface IowaStateScheduleDefinition {
@@ -943,10 +715,12 @@ export async function fetchLiveSports(timeZone: string): Promise<LiveSportsResul
     }
     await pause(150);
   }
-  try {
-    items.push(...(await fetchKernelsItems(now, timeZone, fetchedAt, timeoutMs)));
-  } catch {
-    failures += 1;
+  const leagueResults = await Promise.allSettled(
+    leagueTeams.map((team) => fetchLeagueTeamItems(team, now, timeZone, fetchedAt, timeoutMs)),
+  );
+  for (const outcome of leagueResults) {
+    if (outcome.status === "fulfilled") items.push(...outcome.value);
+    else failures += 1;
   }
   for (const definition of iowaStateSchedules) {
     try {

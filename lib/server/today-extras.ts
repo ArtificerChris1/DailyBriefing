@@ -233,7 +233,11 @@ export async function todayExtras({
     sports: sports
       .filter((item) => item.state !== "scheduled" || item.startsAt?.startsWith("Today"))
       .slice(0, 6)
-      .map((item) => (item.state === "final" ? `${item.title}: ${item.scoreLabel ?? "final"}` : `${item.title}, ${item.startsAt ?? ""}`)),
+      .map((item) =>
+        item.state === "final"
+          ? `${item.title}: ${item.scoreLabel ?? "final"}${item.context ? `. ${item.context}` : ""}`
+          : `${item.title}, ${item.startsAt ?? ""}`,
+      ),
   };
 
   return { occasions, headsUp, dailyBrief: await dailyBrief(facts, mode) };

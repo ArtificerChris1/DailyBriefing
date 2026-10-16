@@ -583,10 +583,8 @@ export function DashboardShell({
                 sports={briefing.sports}
                 date={briefing.date}
                 isToday={isToday}
-                evening={showEvening}
                 hideScores={preferences.hideScores}
                 onToggleScores={() => updatePreference("hideScores", !preferences.hideScores)}
-                nowMs={nowMs}
                 timeZone={timeZone}
               />
             )}

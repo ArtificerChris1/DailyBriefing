@@ -7,7 +7,6 @@ import { useId, useState } from "react";
 import { Badge, Card, ShowMore } from "@/components/ui";
 import type { SportsItem } from "@/lib/briefing-types";
 import { compactGameTime, groupSports } from "@/lib/briefing-view";
-import { plural } from "@/lib/format";
 
 /** Upcoming games shown before "Show more". */
 const UPCOMING_PREVIEW = 4;
@@ -29,32 +28,28 @@ function stateBadge(game: SportsItem) {
   return <Badge tone="info">Upcoming</Badge>;
 }
 
-/** Recent results first, then today's games, then a compact schedule. */
+/** Yesterday's games, then the day being viewed, then a compact schedule. */
 export function SportsCard({
   sports,
   date,
   isToday,
-  evening,
   hideScores,
   onToggleScores,
-  nowMs,
   timeZone,
 }: {
   sports: SportsItem[];
   date: string;
   isToday: boolean;
-  evening: boolean;
   hideScores: boolean;
   onToggleScores: () => void;
-  nowMs: number;
   timeZone: string;
 }) {
   const [showAll, setShowAll] = useState(false);
   const listId = useId();
-  const groups = groupSports(sports, date, nowMs, timeZone);
+  const groups = groupSports(sports, date, timeZone);
   const upcoming = showAll ? groups.upcoming : groups.upcoming.slice(0, UPCOMING_PREVIEW);
   const meta = [
-    groups.results.length ? plural(groups.results.length, "result") : undefined,
+    groups.yesterday.length ? `${groups.yesterday.length} ${isToday ? "yesterday" : "the day before"}` : undefined,
     groups.today.length ? `${groups.today.length} ${isToday ? "today" : "that day"}` : undefined,
     groups.upcoming.length ? `${groups.upcoming.length} coming up` : undefined,
   ]
@@ -74,7 +69,10 @@ export function SportsCard({
             .filter(Boolean)
             .join(" · ")}
         </p>
-        {game.context && <p className="game-detail">{game.context}</p>}
+        {/* A final's context is its recap, which gives the score away. */}
+        {game.context && !(hideScores && game.state === "final") && (
+          <p className="game-detail">{game.context}</p>
+        )}
         {game.standingLabel && <p className="game-detail">{game.standingLabel}</p>}
       </div>
       <span className="game-badges">
@@ -105,14 +103,14 @@ export function SportsCard({
       }
       help={
         <p>
-          Results from roughly the last day and a half come first, then games on this day, then
-          the next few on the schedule. Use the eye button to hide final scores until you are
-          ready to see them.
+          Every tracked team that played the day before comes first, with a recap and any playoff
+          series standing, then games on this day, then the next few on the schedule. Use the eye
+          button to hide final scores until you are ready to see them.
         </p>
       }
     >
       {[
-        { id: "results", title: evening ? "Tonight’s results" : "Latest results", games: groups.results },
+        { id: "yesterday", title: isToday ? "Yesterday" : "The day before", games: groups.yesterday },
         { id: "today", title: isToday ? "Today" : "That day", games: groups.today },
       ]
         .filter((group) => group.games.length > 0)
