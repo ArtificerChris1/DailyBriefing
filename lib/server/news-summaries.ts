@@ -81,9 +81,14 @@ async function summarise(stories: NewsItem[]): Promise<Map<string, string>> {
   const summaries = new Map<string, string>();
   if (!process.env.ANTHROPIC_API_KEY?.trim() || stories.length === 0) return summaries;
   const model = process.env.BRIEF_MODEL?.trim() || DEFAULT_MODEL;
-  const client = new Anthropic();
+  // As in daily-brief.ts: a slow request falls back rather than stalls the build.
+  const client = new Anthropic({ timeout: 90_000, maxRetries: 1 });
+  const batches: NewsItem[][] = [];
   for (let start = 0; start < stories.length; start += BATCH_SIZE) {
-    const batch = stories.slice(start, start + BATCH_SIZE);
+    batches.push(stories.slice(start, start + BATCH_SIZE));
+  }
+  // In parallel, so a backlog of unsummarised stories costs one request's time.
+  await Promise.all(batches.map(async (batch) => {
     try {
       const response = await client.beta.messages.parse({
         model,
@@ -117,7 +122,7 @@ async function summarise(stories: NewsItem[]): Promise<Map<string, string>> {
       const status = error instanceof Anthropic.APIError ? ` (HTTP ${error.status})` : "";
       console.warn(`News summaries skipped for ${batch.length} stories: the Claude request failed${status}.`);
     }
-  }
+  }));
   return summaries;
 }
 

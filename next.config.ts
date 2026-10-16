@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
   // every provider runs then rather than on a server.
   output: "export",
   basePath,
+  // Today's page waits on every feed plus the Claude brief and news
+  // summaries, which can pass the 60-second default on a slow day. A failed
+  // page fails the whole build and leaves yesterday's site up.
+  staticPageGenerationTimeout: 300,
   env: {
     // Identifies this build to the page, which compares it with /build.json
     // to notice when a newer one has been deployed.

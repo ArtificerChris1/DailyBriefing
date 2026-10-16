@@ -60,7 +60,9 @@ async function generate(
   mode: DailyBrief["mode"],
 ): Promise<DailyBrief | undefined> {
   const model = process.env.BRIEF_MODEL?.trim() || DEFAULT_MODEL;
-  const client = new Anthropic();
+  // The SDK waits up to 10 minutes by default; the brief is optional, so a
+  // slow request is dropped rather than allowed to stall the build.
+  const client = new Anthropic({ timeout: 90_000, maxRetries: 1 });
   try {
     const response = await client.beta.messages.parse({
       model,

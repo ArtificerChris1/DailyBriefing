@@ -470,6 +470,8 @@ export async function getBriefingPayload(
     headlineSource,
   ];
   const hasLiveSource = sources.some((source) => source.state === "live");
+  // Started before the daily brief so the two Claude requests overlap.
+  const summarisedHeadlines = withNewsSummaries(recentHeadlines, today);
   const extras =
     date === today
       ? await todayExtras({
@@ -515,7 +517,7 @@ export async function getBriefingPayload(
       weather,
       hourlyWeather,
       sports: recentSports,
-      headlines: await withNewsSummaries(recentHeadlines, today),
+      headlines: await summarisedHeadlines,
       sources,
     },
     connections: [
