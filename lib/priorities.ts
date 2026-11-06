@@ -2,8 +2,8 @@ import type { ReminderItem } from "@/lib/briefing-types";
 import { dayOffsetBetween } from "@/lib/briefing-window";
 
 /**
- * Reminder grouping and the day's top three. Everything a viewer does here —
- * ticking off, pinning, snoozing, adding their own priorities — is kept in
+ * Reminder grouping and due labels. Everything a viewer does here —
+ * ticking off, pinning, snoozing — is kept in
  * that browser only: the site is static and cannot write back to Apple
  * Reminders, so the next Shortcut snapshot remains the source of truth.
  */
@@ -70,83 +70,4 @@ export function dueLabel(reminder: ReminderItem, today: string, timeZone: string
     day: offset < 7 ? undefined : "numeric",
     timeZone,
   }).format(instant)}`;
-}
-
-/** A priority typed in by the viewer rather than taken from Reminders. */
-export interface CustomPriority {
-  id: string;
-  title: string;
-}
-
-export interface PriorityEntry {
-  id: string;
-  title: string;
-  detail: string;
-  /** Why it is in the top three, for the badge beside it. */
-  reason: "Pinned" | "Your priority" | "Overdue" | "Due today" | "Coming up";
-  /** Reminders can be ticked off; custom priorities are removed instead. */
-  source: "reminder" | "custom";
-}
-
-export const TOP_PRIORITY_COUNT = 3;
-
-/**
- * Pinned reminders first, then the viewer's own priorities, then whatever is
- * most pressing: overdue, due today, then the soonest upcoming.
- */
-export function topPriorities({
-  groups,
-  pinned,
-  custom,
-  today,
-  timeZone,
-}: {
-  groups: ReminderGroups;
-  pinned: string[];
-  custom: CustomPriority[];
-  today: string;
-  timeZone: string;
-}): PriorityEntry[] {
-  const all = [...groups.overdue, ...groups.today, ...groups.upcoming, ...groups.undated];
-  const entries: PriorityEntry[] = [];
-  const used = new Set<string>();
-  const fromReminder = (item: ReminderItem, reason: PriorityEntry["reason"]): PriorityEntry => ({
-    id: item.id,
-    title: item.title,
-    detail: [dueLabel(item, today, timeZone), item.listLabel].filter(Boolean).join(" · "),
-    reason,
-    source: "reminder",
-  });
-
-  for (const id of pinned) {
-    const item = all.find((candidate) => candidate.id === id);
-    if (item && !used.has(item.id)) {
-      entries.push(fromReminder(item, "Pinned"));
-      used.add(item.id);
-    }
-  }
-  for (const priority of custom) {
-    entries.push({
-      id: priority.id,
-      title: priority.title,
-      detail: "Added by you",
-      reason: "Your priority",
-      source: "custom",
-    });
-  }
-  const automatic: [ReminderItem[], PriorityEntry["reason"]][] = [
-    [groups.overdue, "Overdue"],
-    [groups.today, "Due today"],
-    [groups.upcoming, "Coming up"],
-  ];
-  for (const [items, reason] of automatic) {
-    for (const item of items) {
-      if (entries.length >= TOP_PRIORITY_COUNT) break;
-      if (!used.has(item.id)) {
-        entries.push(fromReminder(item, reason));
-        used.add(item.id);
-      }
-    }
-  }
-  return entries.slice(0, Math.max(TOP_PRIORITY_COUNT, pinned.length + custom.length));
 }

@@ -42,7 +42,7 @@ The table covers the AAA criteria, and the AA criteria the design affects most. 
 | 2.1.3 Keyboard (no exception) | AAA | Met | Every function, including the timeline, help, undo and dialogs, works from the keyboard. |
 | 2.2.3 No timing | AAA | Met | Status messages stay until dismissed or replaced; nothing expires. |
 | 2.2.4 Interruptions | AAA | Met | The update banner and messages are non-modal and can be dismissed; "Update automatically" can be turned off. |
-| 2.2.5 Re-authenticating | AAA | Met | Ticks, pins, snoozes and priorities are saved on the device, so signing in again loses nothing. |
+| 2.2.5 Re-authenticating | AAA | Met | Ticks, pins and snoozes are saved on the device, so signing in again loses nothing. |
 | 2.2.6 Timeouts | AAA | Met | No timeouts cause data loss. Closing the tab or app signs you out; nothing typed is lost. |
 | 2.3.3 Animation from interactions | AAA | Met | Device reduced-motion setting is respected, and Preferences has its own "Reduce motion" switch. |
 | 2.4.1 Bypass blocks | A | Met | "Skip to the briefing" link first. |
@@ -58,9 +58,9 @@ The table covers the AAA criteria, and the AA criteria the design affects most. 
 | 3.1.5 Reading level | AAA | Met for the interface; see below | Interface text is short and plain. Headlines are the publishers' own; each comes with a one-sentence plain-language summary, which is the supplemental content this criterion allows. |
 | 3.1.6 Pronunciation | AAA | Not applicable | No words whose meaning depends on pronunciation. |
 | 3.2.5 Change on request | AAA | Met | Reloading on return can be turned off ("Update automatically"); links that open new tabs say so. Weather for your location updates content in place without changing context. |
-| 3.3.3 Error suggestion | AA | Met | Sign-in and "Add priority" errors say what to do next. |
+| 3.3.3 Error suggestion | AA | Met | Sign-in errors say what to do next. |
 | 3.3.5 Help | AAA | Met | Each card with non-obvious behaviour has an "About this card" button. |
-| 3.3.6 Error prevention (all) | AAA | Met | Snoozing, dismissing, removing a priority and marking done all offer Undo; ticks and gift marks toggle back; "Reset this device" asks for confirmation. |
+| 3.3.6 Error prevention (all) | AAA | Met | Snoozing and marking done offer Undo; ticks toggle back; "Reset this device" asks for confirmation. |
 | 3.3.9 Accessible authentication (enhanced) | AAA | Met | Passkeys (Face ID, Touch ID, PIN) need no memorisation; the password field allows paste and password managers. |
 | 4.1.3 Status messages | AA | Met | Messages, the update banner and sign-in status use `role="status"`; errors use `role="alert"`. |
 

@@ -235,7 +235,7 @@ export function PreferencesPanel({
       <section className="settings-section">
         <h3>Reset</h3>
         <p className="settings-help">
-          Clears preferences, ticks, pins, snoozes and your own priorities on this device. Your
+          Clears preferences, ticks, pins and snoozes on this device. Your
           sign-in and passkeys are not affected.
         </p>
         {confirmReset ? (

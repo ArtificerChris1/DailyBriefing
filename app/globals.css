@@ -5,7 +5,7 @@
  * 2. Base: reset, typography, focus, skip link, visually-hidden.
  * 3. Shell: top bar, page header, dashboard rows.
  * 4. Card system and shared controls: cards, buttons, badges, lists.
- * 5. Cards: hero, priorities, suggestions, up next, weather, schedule,
+ * 5. Cards: hero, up next, weather, schedule,
  *    reminders, photo, sports, releases, hotness, people, news.
  * 6. Panels, sign-in, banners, toasts.
  *
@@ -381,6 +381,18 @@ code {
   .header-scene {
     display: none;
   }
+
+  /* Phones and a folded or open iPhone Duo: a tighter header gets Up next
+     and Weather closer to the top of the screen. */
+  .page-header {
+    gap: var(--space-3);
+    padding: var(--space-4) 0;
+  }
+
+  .greeting {
+    margin-top: var(--space-1);
+    font-size: var(--text-md);
+  }
 }
 
 .scene-far {
@@ -709,10 +721,6 @@ code {
   max-width: 70ch;
 }
 
-.hero-body .card-warning {
-  margin: 0;
-}
-
 @media (min-width: 64em) {
   .card-warning {
     margin-left: var(--space-5);
@@ -817,19 +825,6 @@ code {
   border-color: var(--danger);
   background: var(--danger-soft);
   color: var(--danger);
-}
-
-.button-toggle {
-  border-color: var(--border-control);
-  background: transparent;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.button-toggle.is-on {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
 }
 
 .button-block {
@@ -1103,246 +1098,17 @@ input[aria-invalid="true"] {
   font-size: var(--text-xl);
 }
 
-.hero-body {
-  display: grid;
-  gap: var(--space-4);
-  padding: 0 var(--space-4) var(--space-4);
-}
-
 .hero-headline {
   max-width: 70ch;
+  padding: 0 var(--space-4) var(--space-4);
   font-size: var(--text-lg);
   font-weight: 550;
-}
-
-.hero-note {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-}
-
-.hero-points {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.hero-points li {
-  display: grid;
-  grid-template-columns: 1.25rem minmax(0, 1fr);
-  gap: var(--space-3);
-  max-width: 70ch;
-  color: var(--accent);
-}
-
-.hero-points p {
-  color: var(--text);
-}
-
-.hero-point-label {
-  color: var(--text-muted) !important;
-  font-size: var(--text-xs);
-  font-weight: 750;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.insights {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
-  gap: var(--space-3);
-}
-
-/* Phones: a compact two-column grid; the icons give way to the text. */
-@media (max-width: 47.99em) {
-  .insights {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-2);
-  }
-
-  .insight {
-    padding: var(--space-3);
-  }
-
-  /* Calendar and reminders carry long titles; weather and occasions pair up. */
-  .insight:nth-child(-n + 2) {
-    grid-column: 1 / -1;
-  }
-}
-
-/* Very narrow or zoomed in: one column again, so nothing is cramped. */
-@media (max-width: 22em) {
-  .insights {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.insight {
-  display: flex;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-}
-
-.insight-icon {
-  display: grid;
-  width: 2.5rem;
-  height: 2.5rem;
-  flex: none;
-  place-items: center;
-  border-radius: var(--radius-md);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.insight-title {
-  font-weight: 700;
-}
-
-.insight-text {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-}
-
-.insight-accent {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--accent);
-  font-weight: 650;
-}
-
-@media (min-width: 48em) {
-  .hero-points {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  text-wrap: pretty;
 }
 
 @media (min-width: 64em) {
-  .hero-body {
+  .hero-headline {
     padding: 0 var(--space-5) var(--space-5);
-  }
-}
-
-/* Top 3 / Carry forward */
-.priorities-card.is-compact .card-header {
-  align-items: center;
-  padding-bottom: var(--space-4);
-}
-
-.priorities-card.is-compact .card-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  column-gap: var(--space-4);
-  padding-top: 0;
-}
-
-.priority-form {
-  display: grid;
-  gap: var(--space-1);
-  padding: 0 var(--space-4) var(--space-4);
-}
-
-.priority-form label {
-  font-size: var(--text-sm);
-  font-weight: 650;
-}
-
-.field-row {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.priority-list {
-  display: grid;
-  gap: var(--space-2);
-  padding: 0 var(--space-4) var(--space-4);
-}
-
-.priority-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-}
-
-.priority-rank {
-  display: grid;
-  width: 2rem;
-  height: 2rem;
-  flex: none;
-  place-items: center;
-  margin-top: var(--space-1);
-  border-radius: var(--radius-sm);
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 800;
-}
-
-.priority-copy {
-  min-width: 0;
-  flex: 1;
-  padding-top: var(--space-1);
-}
-
-.priority-title {
-  font-weight: 650;
-  overflow-wrap: anywhere;
-}
-
-.priority-detail {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-@container (min-width: 48rem) {
-  .priority-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-/* You might have forgotten */
-.suggestion-list {
-  display: grid;
-  gap: var(--space-3);
-  padding: 0 var(--space-4) var(--space-4);
-}
-
-.suggestion-list li {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
-  padding: var(--space-3) var(--space-4);
-  border: 1px dashed var(--border-control);
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-}
-
-.suggestion-title {
-  font-weight: 700;
-}
-
-.suggestion-detail {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-}
-
-.suggestion-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: auto;
-  padding-top: var(--space-2);
-}
-
-@container (min-width: 48rem) {
-  .suggestion-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -2094,18 +1860,16 @@ input[aria-invalid="true"] {
   padding-bottom: var(--space-4);
 }
 
-/* Releases, hotness, birthdays, occasions: compact rows */
+/* Releases, hotness, birthdays: compact rows */
 .media-list,
 .rank-list,
-.people-list,
-.occasion-list {
+.people-list {
   display: grid;
 }
 
 .media-row,
 .rank-list li,
-.people-list li,
-.occasion-list li {
+.people-list li {
   display: flex;
   min-height: 3.5rem;
   align-items: center;
@@ -2116,8 +1880,7 @@ input[aria-invalid="true"] {
 
 .media-row:last-child,
 .rank-list li:last-child,
-.people-list li:last-child,
-.occasion-list li:last-child {
+.people-list li:last-child {
   border-bottom: 0;
 }
 
@@ -2145,8 +1908,7 @@ input[aria-invalid="true"] {
 }
 
 .rank-list,
-.people-list,
-.occasion-list {
+.people-list {
   padding: 0 var(--space-4);
 }
 
@@ -2178,20 +1940,6 @@ input[aria-invalid="true"] {
   color: var(--danger);
 }
 
-/* Occasion rows wrap their "Gift sorted" button under narrow or spaced-out text. */
-.occasion-list li {
-  flex-wrap: wrap;
-  padding: var(--space-2) 0;
-}
-
-.occasion-list .media-copy {
-  flex: 1 1 8rem;
-}
-
-.occasion-list .button-toggle {
-  margin-left: auto;
-}
-
 .people-list li.is-today .when-relative {
   color: var(--accent);
 }
@@ -2204,7 +1952,6 @@ input[aria-invalid="true"] {
 
 .rank-list:last-child,
 .people-list:last-child,
-.occasion-list:last-child,
 #releases-list:last-child {
   padding-bottom: var(--space-4);
 }
@@ -2218,12 +1965,21 @@ input[aria-invalid="true"] {
   .rank-list li:nth-last-child(2):nth-child(odd) {
     border-bottom: 0;
   }
+
+  /* Birthdays has a row to itself, so a wide card splits the list in two. */
+  .people-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-5);
+  }
+
+  .people-list li:nth-last-child(2):nth-child(odd) {
+    border-bottom: 0;
+  }
 }
 
 @media (min-width: 64em) {
   .rank-list,
-  .people-list,
-  .occasion-list {
+  .people-list {
     padding-left: var(--space-5);
     padding-right: var(--space-5);
   }
@@ -2727,17 +2483,9 @@ input[aria-invalid="true"] {
   font-size: var(--text-sm);
 }
 
-/* Phones: the paired hero tiles drop their icons to make room. */
-@media (max-width: 47.99em) {
-  .insight:nth-child(n + 3) .insight-icon {
-    display: none;
-  }
-}
-
 /* Windows High Contrast and other forced-colour modes. */
 @media (forced-colors: active) {
   .card,
-  .insight,
   .timeline-block,
   .badge,
   .button,
@@ -2747,8 +2495,7 @@ input[aria-invalid="true"] {
   }
 
   .timeline-block[aria-pressed="true"],
-  .segmented button[aria-pressed="true"],
-  .button-toggle.is-on {
+  .segmented button[aria-pressed="true"] {
     outline: 2px solid Highlight;
   }
 

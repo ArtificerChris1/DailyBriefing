@@ -26,8 +26,6 @@ import { SportsCard } from "@/components/cards/sports";
 import { UpNextCard } from "@/components/cards/up-next";
 import { WeatherCard } from "@/components/cards/weather";
 import { ConnectionsPanel, Panel, PreferencesPanel } from "@/components/panels";
-import { HeadsUpCard, OccasionsCard } from "@/components/plan-ahead";
-import { PrioritiesCard } from "@/components/priorities-card";
 import type { BriefingPayload, ReminderItem } from "@/lib/briefing-types";
 import { dayModeAt, greetingAt, type DayMode } from "@/lib/briefing-view";
 import { MAX_DAY_OFFSET, MIN_DAY_OFFSET, dayOffsetBetween, shiftDateKey } from "@/lib/briefing-window";
@@ -40,7 +38,6 @@ import {
   readStoredPreferences,
   type Preferences,
 } from "@/lib/preferences";
-import { topPriorities, groupReminders, type CustomPriority } from "@/lib/priorities";
 
 type Panel = "connections" | "preferences" | null;
 type ModeChoice = "auto" | DayMode;
@@ -128,7 +125,6 @@ export function DashboardShell({
   const [completedReminders, setCompletedReminders] = useState<string[]>([]);
   // Device-local, like completedReminders: the site cannot write to Reminders.
   const [pinnedReminders, setPinnedReminders] = useState<string[]>([]);
-  const [customPriorities, setCustomPriorities] = useState<CustomPriority[]>([]);
   /** Reminder id → the first day it shows again. */
   const [snoozedReminders, setSnoozedReminders] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<Toast | null>(null);
@@ -200,7 +196,6 @@ export function DashboardShell({
       for (const [key, apply] of [
         ["brief-completed-reminders", (value: unknown) => Array.isArray(value) && setCompletedReminders(value as string[])],
         ["brief-pinned-reminders", (value: unknown) => Array.isArray(value) && setPinnedReminders(value as string[])],
-        ["brief-custom-priorities", (value: unknown) => Array.isArray(value) && setCustomPriorities(value as CustomPriority[])],
         ["brief-snoozed-reminders", (value: unknown) => value && typeof value === "object" && setSnoozedReminders(value as Record<string, string>)],
       ] as const) {
         const saved = window.localStorage.getItem(key);
@@ -231,9 +226,8 @@ export function DashboardShell({
     if (!preferencesReady) return;
     window.localStorage.setItem("brief-completed-reminders", JSON.stringify(completedReminders));
     window.localStorage.setItem("brief-pinned-reminders", JSON.stringify(pinnedReminders));
-    window.localStorage.setItem("brief-custom-priorities", JSON.stringify(customPriorities));
     window.localStorage.setItem("brief-snoozed-reminders", JSON.stringify(snoozedReminders));
-  }, [completedReminders, pinnedReminders, customPriorities, snoozedReminders, preferencesReady]);
+  }, [completedReminders, pinnedReminders, snoozedReminders, preferencesReady]);
 
   // The baked-in weather is for the configured location. Where the browser
   // allows it, fetch the forecast for wherever the viewer actually is.
@@ -299,11 +293,6 @@ export function DashboardShell({
     );
   }
 
-  function completeFromPriorities(id: string) {
-    toggleReminder(id);
-    notify("Marked done on this device.", () => toggleReminder(id));
-  }
-
   function togglePin(id: string) {
     setPinnedReminders((current) =>
       current.includes(id) ? current.filter((pinnedId) => pinnedId !== id) : [...current, id],
@@ -321,25 +310,10 @@ export function DashboardShell({
     );
   }
 
-  function addCustomPriority(title: string) {
-    setCustomPriorities((current) => [...current, { id: `custom-${Date.now()}`, title }]);
-  }
-
-  function removeCustomPriority(id: string) {
-    const removed = customPriorities.find((priority) => priority.id === id);
-    setCustomPriorities((current) => current.filter((priority) => priority.id !== id));
-    if (removed) {
-      notify(`Removed “${removed.title}”.`, () =>
-        setCustomPriorities((current) => [...current, removed]),
-      );
-    }
-  }
-
   function resetDevice() {
     setPreferences(defaultPreferences);
     setCompletedReminders([]);
     setPinnedReminders([]);
-    setCustomPriorities([]);
     setSnoozedReminders({});
     for (const key of [
       PREFERENCES_KEY,
@@ -359,21 +333,11 @@ export function DashboardShell({
   const shownReminders = (briefing.reminders?.items ?? []).filter(
     (item) => !(snoozedReminders[item.id] && snoozedReminders[item.id] > briefing.today),
   );
-  const openReminders = shownReminders.filter((item) => !completedReminders.includes(item.id));
-  const priorities = topPriorities({
-    groups: groupReminders(openReminders, briefing.today, timeZone),
-    pinned: pinnedReminders,
-    custom: customPriorities,
-    today: briefing.today,
-    timeZone,
-  });
 
   // The hero summary: a morning summary describes today, an evening one
-  // tomorrow. Show the one that fits the view, noting when it is older.
+  // tomorrow. The evening view only uses an evening summary.
   const brief = briefing.dailyBrief;
   const heroBrief = showEvening ? (brief?.mode === "evening" ? brief : undefined) : brief;
-  const heroNote =
-    !showEvening && brief?.mode === "evening" ? "Written last night, looking ahead to today." : undefined;
 
   const greeting = isToday
     ? `${greetingAt(nowMs, timeZone)}. ${showEvening ? "Here’s what tomorrow holds." : "Here’s your day."}`
@@ -500,33 +464,12 @@ export function DashboardShell({
                   : briefing
               }
               brief={heroBrief}
-              briefNote={heroNote}
-              reminders={shownReminders}
-              completed={completedReminders}
-              occasions={briefing.occasions ?? []}
               timeZone={timeZone}
               nowMs={nowMs}
             />
           )}
 
-          {isToday && preferences.showReminders && briefing.reminders && (
-            <PrioritiesCard
-              title={showEvening ? "Carry forward" : "Top 3 today"}
-              entries={priorities}
-              onComplete={completeFromPriorities}
-              onRemoveCustom={removeCustomPriority}
-              onAddCustom={addCustomPriority}
-            />
-          )}
 
-          {isToday && (
-            <HeadsUpCard
-              items={briefing.headsUp ?? []}
-              occasions={briefing.occasions ?? []}
-              reminders={shownReminders}
-              onNotify={notify}
-            />
-          )}
 
           <div className="row row-split">
             <UpNextCard
@@ -597,10 +540,7 @@ export function DashboardShell({
             {briefing.hotGames && <HotnessCard panel={briefing.hotGames} />}
           </div>
 
-          <div className="row row-halves">
-            {isToday && briefing.occasions && <OccasionsCard occasions={briefing.occasions} />}
-            {briefing.birthdays && <BirthdaysCard panel={briefing.birthdays} dayOffset={dayOffset} />}
-          </div>
+          {briefing.birthdays && <BirthdaysCard panel={briefing.birthdays} dayOffset={dayOffset} />}
 
           {preferences.showNews && briefing.headlines.length > 0 && <NewsCard headlines={briefing.headlines} />}
 
