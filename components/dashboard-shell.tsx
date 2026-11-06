@@ -14,6 +14,7 @@ import {
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { BirthdaysCard } from "@/components/cards/birthdays";
+import { GamesCard } from "@/components/cards/games";
 import { GlanceHero, missingCalendars } from "@/components/cards/glance-hero";
 import { HotnessCard } from "@/components/cards/hotness";
 import { NewsCard } from "@/components/cards/news";
@@ -489,6 +490,8 @@ export function DashboardShell({
               timeZone={timeZone}
             />
           </div>
+
+          {isToday && preferences.showGames && <GamesCard />}
 
           <ScheduleCard
             missingCalendars={missingCalendars(briefing)}

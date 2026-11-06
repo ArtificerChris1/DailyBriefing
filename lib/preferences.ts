@@ -14,6 +14,7 @@ export interface Preferences {
   showPhoto: boolean;
   showSports: boolean;
   showNews: boolean;
+  showGames: boolean;
   weatherAlerts: boolean;
   hideScores: boolean;
   /** Colour scheme; WCAG 1.4.8 asks that colours be selectable. */
@@ -37,6 +38,7 @@ export const defaultPreferences: Preferences = {
   showPhoto: true,
   showSports: true,
   showNews: true,
+  showGames: true,
   weatherAlerts: true,
   hideScores: false,
   theme: "dark",

@@ -183,6 +183,7 @@ export function PreferencesPanel({
         <PreferenceToggle label="Photo of the day" checked={preferences.showPhoto} onChange={(checked) => updatePreference("showPhoto", checked)} />
         <PreferenceToggle label="Sports" checked={preferences.showSports} onChange={(checked) => updatePreference("showSports", checked)} />
         <PreferenceToggle label="News" checked={preferences.showNews} onChange={(checked) => updatePreference("showNews", checked)} />
+        <PreferenceToggle label="Daily games" checked={preferences.showGames} onChange={(checked) => updatePreference("showGames", checked)} />
         <PreferenceToggle
           label="Hide sports scores"
           description="Final scores stay hidden until you show them."
