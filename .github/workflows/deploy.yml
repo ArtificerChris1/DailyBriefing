@@ -101,6 +101,7 @@ jobs:
           HOME_CALENDAR_ICAL_URL: ${{ secrets.HOME_CALENDAR_ICAL_URL }}
           API_NINJAS_KEY: ${{ secrets.API_NINJAS_KEY }}
           BGG_API_TOKEN: ${{ secrets.BGG_API_TOKEN }}
+          BGA_SESSION_COOKIE: ${{ secrets.BGA_SESSION_COOKIE }}
           TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           COMICVINE_API_KEY: ${{ secrets.COMICVINE_API_KEY }}

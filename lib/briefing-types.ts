@@ -169,6 +169,33 @@ export interface HotGamesPanel {
   message?: string;
 }
 
+/** One Board Game Arena table the signed-in player is seated at. */
+export interface BgaTable {
+  id: string;
+  game: string;
+  url: string;
+  /** BGA's own estimate of how far through the game the table is, 0–100. */
+  progress: number;
+  /** Other players whose move it is; several during simultaneous phases. */
+  turn: string[];
+  isMyTurn: boolean;
+  playerCount: number;
+}
+
+export interface BgaPanel {
+  /**
+   * "signed-out" covers both a missing session cookie and one BGA no longer
+   * accepts; "unavailable" means BGA could not be read for another reason.
+   * Neither carries tables, so the card never shows old turns as current.
+   */
+  state: "ok" | "signed-out" | "unavailable";
+  /** Your-turn tables first. Empty unless `state` is "ok". */
+  tables: BgaTable[];
+  /** When the build read BGA. */
+  checkedAt: string;
+  message?: string;
+}
+
 export type ReleaseMedium = "movie" | "tv" | "comic" | "book";
 
 export interface ReleaseItem {
@@ -349,6 +376,8 @@ export interface BriefingSnapshot {
   quote?: QuoteOfDay;
   /** Absent entirely when no BGG application token is configured. */
   hotGames?: HotGamesPanel;
+  /** Today's page only. Always present there, saying "signed-out" without a session. */
+  boardGameArena?: BgaPanel;
   /** Absent entirely when no release source is configured. */
   upcomingReleases?: UpcomingReleasesPanel;
   birthdays: BirthdaysPanel;

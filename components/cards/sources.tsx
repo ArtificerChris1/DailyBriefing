@@ -110,6 +110,16 @@ export function SourcesStatus({
         : { name: "BoardGameGeek", health: "ok", status: "loaded" },
   );
   if (isToday) {
+    const bga = briefing.boardGameArena;
+    entries.push(
+      !bga
+        ? { name: "Board Game Arena", health: "off", status: "not set up" }
+        : bga.state === "ok"
+          ? { name: "Board Game Arena", health: "ok", status: when(bga.checkedAt) || "loaded" }
+          : bga.state === "signed-out"
+            ? { name: "Board Game Arena", health: "off", status: "not signed in", detail: bga.message }
+            : { name: "Board Game Arena", health: "failed", status: "couldn’t load", detail: bga.message },
+    );
     entries.push(
       briefing.dailyBrief
         ? { name: "AI summary", health: "ok", status: `written ${when(briefing.dailyBrief.generatedAt)}` }

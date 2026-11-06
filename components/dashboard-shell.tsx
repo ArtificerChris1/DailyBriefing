@@ -491,7 +491,9 @@ export function DashboardShell({
             />
           </div>
 
-          {isToday && preferences.showGames && <GamesCard />}
+          {isToday && preferences.showGames && (
+            <GamesCard bga={briefing.boardGameArena} timeZone={timeZone} />
+          )}
 
           <ScheduleCard
             missingCalendars={missingCalendars(briefing)}

@@ -1167,6 +1167,66 @@ input[aria-invalid="true"] {
   }
 }
 
+/* Board Game Arena: your-turn flag, then one row per table */
+.bga-section {
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.bga-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.bga-checked,
+.bga-status {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.bga-status {
+  font-size: var(--text-sm);
+}
+
+.bga-flag {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--neutral-soft);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.bga-flag-mine {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.bga-list {
+  display: grid;
+  margin-top: var(--space-1);
+}
+
+.bga-list li {
+  display: flex;
+  min-height: 3.5rem;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.bga-list li:last-child {
+  border-bottom: 0;
+}
+
+@media (min-width: 64em) {
+  .bga-section {
+    padding: 0 var(--space-5) var(--space-5);
+  }
+}
+
 /* Up next */
 .up-next {
   display: flex;
